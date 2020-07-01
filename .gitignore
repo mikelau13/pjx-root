@@ -1,0 +1,6 @@
+/docker-compose.yml
+/projects/*
+!/projects/.gitkeep
+
+.DS_Store
+.vscode

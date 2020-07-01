@@ -1,0 +1,26 @@
+# ./docker-compose.yml
+
+version: '3'
+
+services:
+  graphql:
+    container_name: pjx-graphql-apollo-dev
+    depends_on:
+      - memcached
+    build:
+      context: ../projects/pjx-graphql-apollo
+      target: start-${BUILD_ENV}
+      args:
+        BUILD_ENV: ${BUILD_ENV}
+      dockerfile: pjx-graphql-apollo.Dockerfile.dev
+    command: npm run dev
+    volumes:
+      - .:/usr/api
+    ports:
+      - ${PORT_APOLLO}:4000
+      - ${PORT_MEMCACHED}:11211
+    network_mode: "service:pjx-app"
+
+memcached:
+    image: "bitnami/memcached:1.6.6"
+    network_mode: "service:pjx-app"
