@@ -32,7 +32,7 @@ For example if we wanted to run the `pjx-graphql-apollo` app:
 $ cd pjx-root/projects
 $ git clone git@github.com:mikelau13/pjx-graphql-apollo.git
 $ cd ..
-$ docker-compose -f recipes/pjx-graphql-apollo.yml up
+$ docker-compose -f recipes/pjx.yml up
 ```
 
 Then verify your containers are up and running:
