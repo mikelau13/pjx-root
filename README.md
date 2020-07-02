@@ -2,7 +2,6 @@
 
 <p align="center">A one stop shop to launch pjx dockerized apps.</p>
 
-
 ## Installation
 
 Ensure Docker have been installed and running. [Download Docker](https://www.docker.com/get-started)
@@ -16,7 +15,7 @@ Once you've cloned this repo you will these folders:
 
 #### projects
 
-This folder will contain other cloned github repos, where each repo represents a dockerized project. (ie. api, Apollo server, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
+This folder contains other cloned github repos, where each repo represents a dockerized project. (ie. api, Apollo server, web client, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
 
 ### recipes
 
@@ -26,11 +25,12 @@ This folder contains `docker-compose` files for all projects. For example `pjx-g
 
 To run a specifc recipe, clone all the required repos inside the `projects` folder. Each recipe should provide details on which repos are required.
 
-For example if we wanted to run the `pjx-graphql-apollo` app:
+For example if we wanted to run the `pjx` app:
 
 ```bash
 $ cd pjx-root/projects
 $ git clone git@github.com:mikelau13/pjx-graphql-apollo.git
+$ git clone git@github.com:mikelau13/pjx-api-node.git
 $ cd ..
 $ docker-compose -f recipes/pjx.yml up
 ```
