@@ -3,15 +3,29 @@
 version: '3.4'
 
 services:
-  graphql:
+  pjx-graphql:
     build:
       context: ../projects/pjx-graphql-apollo
     container_name: pjx-graphql-apollo-dev
     command: npm run dev
     volumes:
-      - .:/usr/api
+      - .:/usr/graphql
     ports:
       - 4000:4000
+    networks:
+      - pjx-network
+
+  pjx-api:
+    build:
+      context: ../projects/pjx-api-node
+    container_name: pjx-api-node-dev
+    command: npm start
+    volumes:
+      - .:/usr/api
+    ports:
+      - 8081:8081
+    networks:
+      - pjx-network
 
 networks:
   pjx-network:
