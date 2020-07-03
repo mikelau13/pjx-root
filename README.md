@@ -4,14 +4,17 @@
 
 ## Installation
 
-Ensure Docker have been installed and running. [Download Docker](https://www.docker.com/get-started)
+You will need to ensure you have [Docker](https://docs.docker.com/) installed on your machine.
+
+- [Install Docker for Mac](https://docs.docker.com/docker-for-mac/install/)
+- [Install Docker for Windows](https://docs.docker.com/docker-for-windows/)
 
 Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. The is to make this the parent directory for the pjx projects.
 
 
 ## How does it work?
 
-Once you've cloned this repo you will these folders:
+Once you've cloned this repo you will see these 2 folders:
 
 #### projects
 
