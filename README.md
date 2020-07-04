@@ -1,6 +1,15 @@
 # pjx-root
 
-<p align="center">A one stop shop to launch pjx dockerized apps.</p>
+<p align="center">A one stop shop to launch pjx dockerized apps for staging/production environment.</p>
+
+## Overview
+
+Provide a one stop shop to launch all necessary services for the entire application, mostly for staging/production deployment purpose.
+
+For development environment, visit projects and launch each of them individually, since some features are suppopsed to be development only, for instance, hotreloading.
+
+TODO: need separated start command for dev and prod environment
+
 
 ## Installation
 
