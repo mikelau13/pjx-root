@@ -27,17 +27,29 @@ services:
     networks:
       - pjx-network
 
-  pjx-react:
+  pjx-web-react:
     build:
-      context: ../projects/pjx-react
-    container_name: pjx-react-dev
+      context: ../projects/pjx-web-react
+    container_name: pjx-web-react-dev
     command: npm start
     volumes:
       - .:/usr/react
     ports:
       - 3000:3000
     networks:
-      - pjx-network    
+      - pjx-network
+    stdin_open: true 
+    tty: true
+
+  pjx-sso-identityserver:
+    build:
+      context: ../projects/pjx-sso-identityserver
+    container_name: pjx-sso-identityserver-dev
+    ports:
+      - 5001:80
+    networks:
+      - pjx-network
+
 
 networks:
   pjx-network:
