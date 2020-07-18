@@ -8,6 +8,16 @@ Provide a one stop shop to launch all necessary services for the entire pjx appl
 
 For development environment, better visit projects and launch each of them individually, since some features are suppopsed to be development only.
 
+To run `pjx-root` you will need the following projects:
+
+[pjx-web-react](https://github.com/mikelau13/pjx-web-react) - this is the client side web interface, being developed using React.js
+
+[pjx-graphql-apollo](https://github.com/mikelau13/pjx-graphql-apollo) - Api gateway using Apollo Server with GraphQL, `pjx-web-react` supposed to consume any Api through this middleware 
+
+[pjx-sso-identityserver](https://github.com/mikelau13/pjx-sso-identityserver) - open source [IdentityServer4](https://github.com/IdentityServer/IdentityServer4) for .NET Core 3.1, an identity server to handle authentication and authorization, the `pjx-web-react` web interface will be connecting to this server using `ocid-client` library.  Visit [IdentityServer4](https://identityserver4.readthedocs.io/en/latest/) for documentations.
+
+[pjx-api-node](https://github.com/mikelau13/pjx-api-node) - Api backend
+
 TODO: need separated start command for dev and prod environment
 
 
