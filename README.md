@@ -1,12 +1,18 @@
 # pjx-root
 
-<p align="center">An one stop shop to launch the entire pjx dockerized application for staging/production environment.</p>
+<p align="center">An one stop shop to launch the entire `pjx` dockerized application.</p>
 
 ## Overview
 
-Provide a one stop shop to launch all necessary services for the entire pjx application, mostly for `testing` environment deployment purpose (and later staging/production environment).
+To run `pjx-root` you will need the following projects:
 
-For development environment, better visit projects and launch each of them individually, since some features are suppopsed to be development only.
+- [pjx-web-react](https://github.com/mikelau13/pjx-web-react) - this is the client side web interface, developed using React.js
+
+- [pjx-graphql-apollo](https://github.com/mikelau13/pjx-graphql-apollo) - Api gateway using Apollo Server, the web interface `pjx-web-react` consumes Api through this middleware with GraphQL 
+
+- [pjx-sso-identityserver](https://github.com/mikelau13/pjx-sso-identityserver) - open source [IdentityServer4](https://github.com/IdentityServer/IdentityServer4) with .NET Core 3.1, it is an identity server to handle authentication of the web app with OAuth2, the `pjx-web-react` web interface will be connecting to this server using `ocid-client` client library.  Visit [IdentityServer4](https://identityserver4.readthedocs.io/en/latest/) for documentations.
+
+- [pjx-api-node](https://github.com/mikelau13/pjx-api-node) - Api backend to fetch data and manage business logic.
 
 TODO: need separated start command for dev and prod environment
 
@@ -46,7 +52,13 @@ $ git clone git@github.com:mikelau13/pjx-web-react.git
 $ docker-compose -f ../solutions/pjx.yml up
 ```
 
-On development environment, you might want to first prune all running containers to avoid any conflicts:
+Execute this command to stop them:
+
+```bash
+$ docker-compose -f ../solutions/pjx.yml down
+```
+
+On development environment, you might want to first prune all containers to avoid any conflicts:
 
 ```bash
 docker system prune
@@ -58,4 +70,4 @@ Then verify your containers are up and running:
 $ docker ps
 ```
 
-Visit the homepage at `http://localhost:3000` to verify the application.
+Then visit `http://localhost:3000` to try the website.
