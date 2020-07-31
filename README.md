@@ -12,7 +12,9 @@ To run `pjx-root` you will need the following projects:
 
 - [pjx-sso-identityserver](https://github.com/mikelau13/pjx-sso-identityserver) - open source [IdentityServer4](https://github.com/IdentityServer/IdentityServer4) with .NET Core 3.1, it is an identity server to handle authentication of the web app with OAuth2, the `pjx-web-react` web interface will be connecting to this server using `ocid-client` client library.  Visit [IdentityServer4](https://identityserver4.readthedocs.io/en/latest/) for documentations.
 
-- [pjx-api-node](https://github.com/mikelau13/pjx-api-node) - Api backend to fetch data and manage business logic.
+- [pjx-api-node](https://github.com/mikelau13/pjx-api-node) - Api backend developed with TypeScript to fetch data and manage business logic.
+
+- [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
 
 TODO: need separated start command for dev and prod environment
 
@@ -41,21 +43,22 @@ This folder contains `docker-compose` files for all projects. For example `pjx-g
 
 ## Running a solution
 
-To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the `pjx.yml`:
+To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
 
 ```bash
 $ cd pjx-root/projects
 $ git clone git@github.com:mikelau13/pjx-graphql-apollo.git
 $ git clone git@github.com:mikelau13/pjx-api-node.git
+$ git clone git@github.com:mikelau13/pjx-api-dotnet.git
 $ git clone git@github.com:mikelau13/pjx-sso-identityserver.git
 $ git clone git@github.com:mikelau13/pjx-web-react.git
-$ docker-compose -f ../solutions/pjx.yml up
+$ docker-compose -f ../docker-compose.yml up
 ```
 
 Execute this command to stop them:
 
 ```bash
-$ docker-compose -f ../solutions/pjx.yml down
+$ docker-compose -f ../docker-compose.yml down
 ```
 
 On development environment, you might want to first prune all containers to avoid any conflicts:
