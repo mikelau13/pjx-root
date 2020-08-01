@@ -43,7 +43,7 @@ This folder contains other cloned github repos, where each repo represents a doc
 To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
 
 ```bash
-cd pjx-root/projects
+cd ./projects
 git clone https://github.com/mikelau13/pjx-graphql-apollo.git
 git clone https://github.com/mikelau13/pjx-api-node.git
 git clone https://github.com/mikelau13/pjx-api-dotnet.git
