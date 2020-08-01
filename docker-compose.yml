@@ -1,0 +1,70 @@
+# ./docker-compose.yml
+
+version: '3.8'
+
+services:
+  pjx-graphql:
+    build:
+      context: ./projects/pjx-graphql-apollo
+    container_name: pjx-graphql-apollo-dev
+    command: npm run dev
+    volumes:
+      - .:/usr/graphql
+    ports:
+      - 4000:4000
+    networks:
+      - pjx-network
+
+  pjx-api-dotnet:
+    build:
+      context: ./projects/pjx-api-dotnet/src/Pjx_Api/
+      dockerfile: Dockerfile
+    container_name: pjx-api-dotnet-dev
+    volumes:
+      - .:/usr/api-dotnet
+    ports:
+      - 6001:80
+    networks:
+      - pjx-network
+
+  pjx-api:
+    build:
+      context: ./projects/pjx-api-node
+    container_name: pjx-api-node-dev
+    command: npm start
+    volumes:
+      - .:/usr/api
+    ports:
+      - 8081:8081
+    networks:
+      - pjx-network
+
+  pjx-web-react:
+    build:
+      context: ./projects/pjx-web-react
+    container_name: pjx-web-react-dev
+    command: npm start
+    volumes:
+      - .:/usr/react
+    ports:
+      - 3000:3000
+    networks:
+      - pjx-network
+    stdin_open: true 
+    tty: true
+
+  pjx-sso-identityserver:
+    build:
+      context: ./projects/pjx-sso-identityserver
+    container_name: pjx-sso-identityserver-dev
+    ports:
+      - 5001:80
+    networks:
+      - pjx-network
+
+
+networks:
+  pjx-network:
+    name: pjx-network
+    driver: bridge
+
