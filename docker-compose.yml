@@ -27,13 +27,13 @@ services:
     networks:
       - pjx-network
 
-  pjx-api:
+  pjx-api-node:
     build:
       context: ./projects/pjx-api-node
     container_name: pjx-api-node-dev
     command: npm start
     volumes:
-      - .:/usr/api
+      - .:/usr/api-node
     ports:
       - 8081:8081
     networks:

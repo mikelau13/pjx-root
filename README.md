@@ -43,13 +43,13 @@ This folder contains other cloned github repos, where each repo represents a doc
 To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
 
 ```bash
-$ cd pjx-root/projects
-$ git clone https://github.com/mikelau13/pjx-graphql-apollo.git
-$ git clone https://github.com/mikelau13/pjx-api-node.git
-$ git clone https://github.com/mikelau13/pjx-api-dotnet.git
-$ git clone https://github.com/mikelau13/pjx-sso-identityserver.git
-$ git clone https://github.com/mikelau13/pjx-web-react.git
-$ docker-compose -f ../docker-compose.yml up
+cd pjx-root/projects
+git clone https://github.com/mikelau13/pjx-graphql-apollo.git
+git clone https://github.com/mikelau13/pjx-api-node.git
+git clone https://github.com/mikelau13/pjx-api-dotnet.git
+git clone https://github.com/mikelau13/pjx-sso-identityserver.git
+git clone https://github.com/mikelau13/pjx-web-react.git
+docker-compose -f ../docker-compose.yml up
 ```
 
 Execute this command to stop them:
