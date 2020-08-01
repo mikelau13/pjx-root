@@ -44,11 +44,11 @@ To run the `pjx` solution, clone all the required repos inside the `projects` fo
 
 ```bash
 $ cd pjx-root/projects
-$ git clone git@github.com:mikelau13/pjx-graphql-apollo.git
-$ git clone git@github.com:mikelau13/pjx-api-node.git
-$ git clone git@github.com:mikelau13/pjx-api-dotnet.git
-$ git clone git@github.com:mikelau13/pjx-sso-identityserver.git
-$ git clone git@github.com:mikelau13/pjx-web-react.git
+$ git clone https://github.com/mikelau13/pjx-graphql-apollo.git
+$ git clone https://github.com/mikelau13/pjx-api-node.git
+$ git clone https://github.com/mikelau13/pjx-api-dotnet.git
+$ git clone https://github.com/mikelau13/pjx-sso-identityserver.git
+$ git clone https://github.com/mikelau13/pjx-web-react.git
 $ docker-compose -f ../docker-compose.yml up
 ```
 
