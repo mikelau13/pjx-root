@@ -1,6 +1,12 @@
 pipeline {
   agent any
   stages {
+    stage('Cleanup Workspace') {
+      steps {
+        cleanWs()
+      }
+    }
+
     stage('Checkout') {
       steps {
         dir(path: 'pjx-graphql-apollo') {
