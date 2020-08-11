@@ -26,6 +26,8 @@ services:
       - 6001:80
     networks:
       - pjx-network
+    environment:
+      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver:5002
 
   pjx-api-node:
     build:
@@ -61,6 +63,12 @@ services:
       - 5001:80
     networks:
       - pjx-network
+    environment:
+      - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.cert_rsa512.pfx
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=password
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/pjx-sso-identityserver.cert_rsa512.pfx
 
 
 networks:
