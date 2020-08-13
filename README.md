@@ -16,7 +16,8 @@ To run `pjx-root` you will need the following projects:
 
 - [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
 
-TODO: need separated start command for dev and prod environment
+Overall architecture looks like this: 
+![Image of pjx overall architecture](pjx-overall.PNG)
 
 
 ## Installation
