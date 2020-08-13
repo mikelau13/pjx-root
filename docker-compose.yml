@@ -3,7 +3,7 @@
 version: '3.8'
 
 services:
-  pjx-graphql:
+  pjx-graphql-apollo:
     build:
       context: ./projects/pjx-graphql-apollo
     container_name: pjx-graphql-apollo-dev
@@ -26,6 +26,8 @@ services:
       - 6001:80
     networks:
       - pjx-network
+    environment:
+      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
 
   pjx-api-node:
     build:
@@ -59,12 +61,20 @@ services:
     container_name: pjx-sso-identityserver-dev
     ports:
       - 5001:80
+      - 5002:443
+      - 443:443
     networks:
       - pjx-network
+    environment:
+      - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
+      - PJX_SSO__PASSWORD=password
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=password
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/pjx-sso-identityserver.rsa_2048.cert.pfx
 
 
 networks:
   pjx-network:
     name: pjx-network
     driver: bridge
-
