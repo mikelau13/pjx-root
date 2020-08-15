@@ -88,4 +88,4 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 - visit the GraphQL playground of the Apollo Server - http://localhost:4000
 - try out the Swagger of the .NET Core API - http://localhost:6001/swagger/
 - try out the Swagger of the Identity Server - https://pjx-sso-identityserver/swagger
-
+- try out the responsive HTML design by changing the browser size
