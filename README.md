@@ -17,7 +17,7 @@ To run `pjx-root` you will need the following projects:
 - [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
 
 Architecture overview looks like this: 
-![pjx Architecture Overview](/images/pjx-overview.PNG)
+![pjx Architecture Overview](/images/pjx-overview.png)
 
 
 ## Installation
@@ -89,6 +89,7 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 - on the left/hamburger menu, visit the `/cities` page - it will verify the Apollo Server and the Restify API
 - on the left/hamburger menu, visit the `Profile` page - it will verify the Identity Server MVC
 - Sign Out
+![pjx user validated](/images/user_signout.png)
 - visit the GraphQL playground of the Apollo Server - http://localhost:4000
 ![pjx graphql playground](/images/apollo_query.png)
 - try out the Swagger of the .NET Core API - http://localhost:6001/swagger/
