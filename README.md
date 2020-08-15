@@ -81,10 +81,10 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 - register a new account - verify if the web app `client side` is consuming the `Identity Server API`, with `SSL` and `CoRS` settings, properly or not
 - activate your account - since this project is for demo purpose, you will not receive the activation email, instead, after registration, check the command logs to find the activation code to active your account
 - login
-- on the site menu, visit the `Country` page - this will verify the connectivity with the .NET Core API, which will authenticate the connection with the Identity Server on the  `backend` side
-- on the site menu, visit the `City` page - it will verify the Apollo Server and the Restify API
-- on the site menu, visit the `User Profile` page - it will verify the Identity Server MVC
-- logout
+- on the site menu, visit the `/country/all` page - this will verify the connectivity with the .NET Core API, which will authenticate the connection with the Identity Server on the  `backend` side
+- on the left/hamburger menu, visit the `/cities` page - it will verify the Apollo Server and the Restify API
+- on the left/hamburger menu, visit the `Profile` page - it will verify the Identity Server MVC
+- Sign Out
 - visit the GraphQL playground of the Apollo Server - http://localhost:4000
 - try out the Swagger of the .NET Core API - http://localhost:6001/swagger/
 - try out the Swagger of the Identity Server - https://pjx-sso-identityserver/swagger
