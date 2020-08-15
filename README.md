@@ -16,8 +16,8 @@ To run `pjx-root` you will need the following projects:
 
 - [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
 
-Overall architecture looks like this: 
-![Image of pjx Architecture Overview](pjx-overview.PNG)
+Architecture overview looks like this: 
+![pjx Architecture Overview](/images/pjx-overview.PNG)
 
 
 ## Installation
@@ -79,13 +79,21 @@ For localhost testing, you will need to set up the `hosts` file and trust the SS
 You can now visit `http://localhost:3000` to try the website, there are few sanity testing you can try:
 
 - register a new account - verify if the web app `client side` is consuming the `Identity Server API`, with `SSL` and `CoRS` settings, properly or not
-- activate your account - since this project is for demo purpose, you will not receive the activation email, instead, after registration, check the command logs to find the activation code to active your account
+![pjx user registration](/images/user_registration.png)
+- activate your account - since this project is for demo purpose, you will not receive the activation email, instead, after registration, check the command logs to find the activation code to active your account 
+![pjx user registered](/images/account_registered.png)
+![pjx user validated](/images/account_validated.png)
 - login
+![pjx user validated](/images/user_login.png)
 - on the site menu, visit the `/country/all` page - this will verify the connectivity with the .NET Core API, which will authenticate the connection with the Identity Server on the  `backend` side
 - on the left/hamburger menu, visit the `/cities` page - it will verify the Apollo Server and the Restify API
 - on the left/hamburger menu, visit the `Profile` page - it will verify the Identity Server MVC
 - Sign Out
 - visit the GraphQL playground of the Apollo Server - http://localhost:4000
+![pjx graphql playground](/images/apollo_query.png)
 - try out the Swagger of the .NET Core API - http://localhost:6001/swagger/
+![pjx api swagger](/images/api_swagger.png)
 - try out the Swagger of the Identity Server - https://pjx-sso-identityserver/swagger
+![pjx sso swagger](/images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
+![pjx html responsive](/images/mobile_desktop.png)
