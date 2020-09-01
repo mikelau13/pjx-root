@@ -26,6 +26,7 @@ You will need to ensure you have [Docker](https://docs.docker.com/) installed on
 
 - [Install Docker for Mac](https://docs.docker.com/docker-for-mac/install/)
 - [Install Docker for Windows](https://docs.docker.com/docker-for-windows/)
+- [Install Docker for Ubuntu](https://phoenixnap.com/kb/how-to-install-docker-on-ubuntu-18-04)
 
 Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. The is to make this the parent directory for the pjx projects.
 
@@ -90,6 +91,8 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 - on the site menu, visit the `/country/all` page - this will verify the connectivity with the .NET Core API, which will authenticate the connection with the Identity Server on the  `backend` side
 - on the left/hamburger menu, visit the `/cities` page - it will verify the Apollo Server and the Restify API
 - on the left/hamburger menu, visit the `Profile` page - it will verify the Identity Server MVC
+- Calendar - CURD
+<br/><img src="/images/calendar.png" alt="pjx calendar" style="max-width: 70%;" />
 - Sign Out
 <br/><img src="/images/user_signout.png" alt="pjx user signout" style="max-width: 50%;" />
 
