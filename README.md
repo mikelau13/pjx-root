@@ -19,6 +19,9 @@ To run `pjx-root` you will need the following projects:
 Architecture overview looks like this: 
 ![pjx Architecture Overview](/images/pjx-overview.png)
 
+Kubernetes Cluster looks like this: 
+![pjx Kubernetes Deployment](/images/pjx-Deployment.png)
+
 
 ## Installation
 
@@ -104,3 +107,4 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 ![pjx sso swagger](/images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
 ![pjx html responsive](/images/mobile_desktop.png)
+
