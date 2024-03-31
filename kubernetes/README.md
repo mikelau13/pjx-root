@@ -50,7 +50,7 @@ Test these links in web browser:
 - http://api.pjx.com:30601/api/calendar/healthcheck
 - http://api.pjx.com/api/calendar/healthcheck
 - https://api.pjx.com/api/calendar/healthcheck
-- https://www.pjx.com/
+- http://www.pjx.com:30100/
 - http://ql.pjx.com:30400/
 
 
