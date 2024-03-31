@@ -6,7 +6,6 @@ Kubernetes provisioning solution for <a href='https://github.com/users/mikelau13
 
 
 ## Installation
-
 ### System Requirements
 
 Please see instructions on how to setup the <a href='https://github.com/mikelau13/pjx-root/blob/master/README.md'>pjx docker environments</a>.
@@ -18,8 +17,14 @@ Please see instructions on how to setup the <a href='https://github.com/mikelau1
 
 Install Minikube (strongly recommanded using Hyper-V driver) and enable Ingress
 ```ps
+minikube config set driver hyperv
 minikube start --driver=hyperv
 minikube addons enable ingress
+```
+
+Note: for in case, a guaranteed way to stop your previously running Minikube is to delete it, although this is not be best practise:
+```ps
+minikube delete
 ```
 
 Then apply the Kubernetes Namespace, Config and Secret:
@@ -66,3 +71,10 @@ kubectl get all -n pjx
 minikube service list
 minikube ip
 ```
+
+# To Do
+
+SSO identifiy server
+- test certificate password is being hardcoded, need to change to use Kebernetes secret.
+- add health check
+- add configurations for certain environments that their URL under Kubernetes are not the same as in docker compose

@@ -21,15 +21,9 @@ spec:
         - containerPort: 5002
         env:
         - name: PJX_SSO__PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: pjx-secret
-              key: sso-password
+          value: password
         - name: ASPNETCORE_Kestrel__Certificates__Default__Password
-          valueFrom:
-            secretKeyRef:
-              name: pjx-secret
-              key: certificate-password
+          value: password
         - name: PJX_SSO__CERTIFICATE
           value: pjx-sso-identityserver.rsa_2048.cert.pfx
         - name: ASPNETCORE_ENVIRONMENT
