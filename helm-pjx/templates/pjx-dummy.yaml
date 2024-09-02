@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pjx-dummy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pjx-dummy
+  template:
+    metadata:
+      labels:
+        app: pjx-dummy
+    spec:
+      containers:
+        - name: pjx-dummy
+          image: mikelauawaremd/pjx-dummy:v0.0.2
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pjx-dummy
+spec:
+  type: NodePort
+  selector:
+    app: pjx-dummy
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+      nodePort: 31001
