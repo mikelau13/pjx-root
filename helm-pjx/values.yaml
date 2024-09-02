@@ -1,0 +1,4 @@
+react:
+  appName: pjx-react
+
+ssoUrl: http://pjx-sso-identityserver:30501
