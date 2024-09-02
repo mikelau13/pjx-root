@@ -1,4 +1,11 @@
+dotnet_api:
+  appName: pjx-dotnet
+  replicas: 1
+node_api:
+  appName: pjx-node
+  replicas: 1
 react:
   appName: pjx-react
+  replicas: 2
 
 ssoUrl: http://pjx-sso-identityserver:30501
