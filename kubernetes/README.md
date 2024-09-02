@@ -8,9 +8,9 @@ Kubernetes provisioning solution for <a href='https://github.com/users/mikelau13
 ## Installation
 ### System Requirements
 
-Please see instructions on how to setup the <a href='https://github.com/mikelau13/pjx-root/blob/master/README.md'>pjx docker environments</a>.
-
-<a href='https://minikube.sigs.k8s.io/'>Minikube</a>
+- Please see instructions on how to setup the <a href='https://github.com/mikelau13/pjx-root/blob/master/README.md'>pjx docker environments</a>.
+- Docker Desktop 4.26.0 (130397).
+- <a href='https://minikube.sigs.k8s.io/'>Minikube</a> version 1.32.0.
 
 
 ### Launch the application

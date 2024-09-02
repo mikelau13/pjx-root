@@ -27,6 +27,8 @@ Kubernetes Cluster looks like this:
 
 You will need to ensure you have [Docker](https://docs.docker.com/) installed on your machine.
 
+Docker Desktop 4.26.0 (130397).
+
 - [Install Docker for Mac](https://docs.docker.com/docker-for-mac/install/)
 - [Install Docker for Windows](https://docs.docker.com/docker-for-windows/)
 - [Install Docker for Ubuntu](https://phoenixnap.com/kb/how-to-install-docker-on-ubuntu-18-04)
