@@ -23,7 +23,8 @@ Kubernetes Cluster looks like this:
 ![pjx Kubernetes Deployment](/images/pjx-Deployment.png)
 
 
-Or Plant UML (Auto converted by Cluade.Ai)
+#### Plant UML (Auto converted by Cluade.Ai)
+
 
 <div hidden>
 ```
@@ -71,7 +72,6 @@ DotnetController -down-> OAuth : "authorize"
 WebReactLogin -right-> MVC : "redirect"
 
 @enduml
-```
 </div>
 
 ![](/images/pjx-overview.svg)
