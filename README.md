@@ -24,6 +24,7 @@ Kubernetes Cluster looks like this:
 
 
 Or Plant UML (Auto converted by Cluade.Ai)
+
 <div hidden>
 ```
 @startuml pjx-overview
