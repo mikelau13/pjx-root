@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pjx-react-deployment
+  labels:
+    app: pjx-react
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pjx-react
+  template:
+    metadata:
+      labels:
+        app: pjx-react
+    spec:
+      containers:
+      - name: pjx-react
+        image: mikelauawaremd/pjx-web-react:v0.0.6
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pjx-react-service
+spec:
+  type: NodePort
+  selector:
+    app: pjx-react
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30100

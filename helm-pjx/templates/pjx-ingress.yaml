@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pjx-ingress
+spec:
+  rules:
+  - host: api.pjx.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pjx-dotnet-service
+            port: 
+              number: 80
+  - host: ql.pjx.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pjx-apollo-service
+            port: 
+              number: 82
+  - host: sso.pjx.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pjx-sso-service
+            port: 
+              number: 83

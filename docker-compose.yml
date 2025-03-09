@@ -7,7 +7,7 @@ services:
     build:
       context: ./projects/pjx-graphql-apollo
     container_name: pjx-graphql-apollo-dev
-    command: npm run dev
+    #command: npm run dev
     volumes:
       - .:/usr/graphql
     ports:
@@ -33,7 +33,7 @@ services:
     build:
       context: ./projects/pjx-api-node
     container_name: pjx-api-node-dev
-    command: npm start
+    #command: npm start
     volumes:
       - .:/usr/api-node
     ports:
@@ -45,7 +45,7 @@ services:
     build:
       context: ./projects/pjx-web-react
     container_name: pjx-web-react-dev
-    command: npm start
+    #command: npm start
     volumes:
       - .:/usr/react
     ports:

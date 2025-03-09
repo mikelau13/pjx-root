@@ -1,0 +1,19 @@
+pjx successfully created.
+Make sure config the ip address in hosts file for the following domains (get the ip address from minikube ip):
+  api.pjx.com
+  www.pjx.com
+  ql.pjx.com
+  pjx-sso-identityserver
+
+The application still have a lot of issues to be fixed, for example, Register not working because of CORS; Sign On still need to configure the Identity Server URL.
+
+To start application, open in web browser: 
+http://api.pjx.com:30601/api/calendar/healthcheck
+http://api.pjx.com/api/calendar/healthcheck
+http://www.pjx.com:30100/
+http://ql.pjx.com:30400/
+http://pjx-sso-identityserver:30501/
+
+
+
+

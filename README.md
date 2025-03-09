@@ -19,6 +19,9 @@ To run `pjx-root` you will need the following projects:
 Architecture overview looks like this: 
 ![pjx Architecture Overview](/images/pjx-overview.png)
 
+Kubernetes Cluster looks like this: 
+![pjx Kubernetes Deployment](/images/pjx-Deployment.png)
+
 
 Or Plant UML (Auto converted by Cluade.Ai)
 <div hidden>
@@ -89,6 +92,14 @@ Once you've cloned this repo you will see an empty folder `/projects`.
 This folder contains other cloned github repos, where each repo represents a dockerized project. (ie. api, Apollo server, web client, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
 
 
+## Helm Charts
+
+```ps
+helm install pjx-release helm-pjx/
+```
+
+
+
 ## Running a solution
 
 To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
@@ -155,3 +166,4 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 ![pjx sso swagger](/images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
 ![pjx html responsive](/images/mobile_desktop.png)
+
