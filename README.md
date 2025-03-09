@@ -20,6 +20,57 @@ Architecture overview looks like this:
 ![pjx Architecture Overview](/images/pjx-overview.png)
 
 
+Or Plant UML (Auto converted by Cluade.Ai)
+<div hidden>
+@startuml pjx-overview
+
+package "web Pjx" {
+  component "pjx-web-react:\nGeneral data" as WebReactGeneral
+  component "pjx-web-react:\nClientPage" as WebReactClient
+  component "pjx-web-react:\nLogin,Register,Activation Pages" as WebReactLogin
+}
+
+package "Apollo_Server" as ApolloServer {
+  component "GraphQL API" as GraphQLAPI
+}
+
+package "API server" as APIServerNode {
+  component "pjx-api-node:\nRestify API" as RestifyAPI
+  database "Database1" as DB1
+}
+
+package "API server" as APIServerDotnet {
+  component "pjx-api-dotnet:\ncontroller" as DotnetController
+  database "Database2" as DB2
+}
+
+package "Identity Server" as IdentityServer {
+  component "pjx-sso-identityserver:\nOAuth2.0 endpoint" as OAuth
+  component "pjx-sso-identityserver:\nMVC" as MVC
+  database "Database3" as DB3
+}
+
+note top of ApolloServer : pjx-graphql-apollo
+note top of APIServerNode : pjx-api-node
+note top of APIServerDotnet : pjx-api-dotnet
+note top of IdentityServer : pjx-sso-identityserver
+note top of WebReactGeneral : React js Web
+note left of WebReactClient : restricted pages
+
+WebReactGeneral -right-> GraphQLAPI : "GraphQL query"
+GraphQLAPI -right-> RestifyAPI : "request data"
+
+WebReactClient -right-> DotnetController : "OpenID Connect"
+DotnetController -down-> OAuth : "authorize"
+
+WebReactLogin -right-> MVC : "redirect"
+
+@enduml
+</div>
+
+![](/images/pjx-overview.svg)
+
+
 ## Installation
 
 You will need to ensure you have [Docker](https://docs.docker.com/) installed on your machine.
