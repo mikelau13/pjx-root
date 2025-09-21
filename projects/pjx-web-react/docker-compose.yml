@@ -1,0 +1,24 @@
+# ./docker-compose.yml
+
+version: '3.8'
+
+services:
+  pjx-web-react:
+    build:
+      context: .
+    # dockerfile: Dockerfile.dev
+    container_name: pjx-web-react-dev
+    # command: npm start
+    volumes:
+      - .:/usr/react
+    ports:
+      - 3000:3000
+    networks:
+      - pjx-network
+    stdin_open: true 
+    tty: true
+
+networks:
+  pjx-network:
+    name: pjx-network
+    driver: bridge
