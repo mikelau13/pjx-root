@@ -1,0 +1,68 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30907.101
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx.CalendarEntity", "src\Pjx.CalendarEntity\Pjx.CalendarEntity.csproj", "{C24812BF-03B6-4B0A-9EBB-89B43E725A78}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx.CalendarLibrary", "src\Pjx.CalendarLibrary\Pjx.CalendarLibrary.csproj", "{A5DF2475-9934-4ECA-B73A-F97A9B6CC704}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx.Calendar_Test", "src\Pjx.Calendar_Test\Pjx.Calendar_Test.csproj", "{9D468B3A-6021-493F-801F-39C200DAD66E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "pjx-api-dotnet", "src\Pjx_Api\pjx-api-dotnet.csproj", "{3AB74619-B9CF-42EA-886B-FB5A7D33AF80}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx_Api_Test", "src\Pjx_Api_Test\Pjx_Api_Test.csproj", "{1FC815CC-9F74-4D91-AD38-66D0838B19C4}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx_CreateCertificates", "src\Pjx_CreateCertificates\Pjx_CreateCertificates.csproj", "{C61C5781-66F4-47B7-9F68-CF5D58979B2A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pjx_CreateCertificates_Test", "src\Pjx_CreateCertificates_Test\Pjx_CreateCertificates_Test.csproj", "{9F720ECC-34AC-4681-AFF1-6AE09E1B99A8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "artifacts", "artifacts", "{65764C4F-3F6B-4306-8EE6-42BC6B33AE1D}"
+	ProjectSection(SolutionItems) = preProject
+		docker-compose.yml = docker-compose.yml
+		Dockerfile = Dockerfile
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C24812BF-03B6-4B0A-9EBB-89B43E725A78}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C24812BF-03B6-4B0A-9EBB-89B43E725A78}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C24812BF-03B6-4B0A-9EBB-89B43E725A78}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C24812BF-03B6-4B0A-9EBB-89B43E725A78}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A5DF2475-9934-4ECA-B73A-F97A9B6CC704}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5DF2475-9934-4ECA-B73A-F97A9B6CC704}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5DF2475-9934-4ECA-B73A-F97A9B6CC704}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5DF2475-9934-4ECA-B73A-F97A9B6CC704}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D468B3A-6021-493F-801F-39C200DAD66E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D468B3A-6021-493F-801F-39C200DAD66E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D468B3A-6021-493F-801F-39C200DAD66E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D468B3A-6021-493F-801F-39C200DAD66E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3AB74619-B9CF-42EA-886B-FB5A7D33AF80}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3AB74619-B9CF-42EA-886B-FB5A7D33AF80}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3AB74619-B9CF-42EA-886B-FB5A7D33AF80}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3AB74619-B9CF-42EA-886B-FB5A7D33AF80}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FC815CC-9F74-4D91-AD38-66D0838B19C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FC815CC-9F74-4D91-AD38-66D0838B19C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FC815CC-9F74-4D91-AD38-66D0838B19C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FC815CC-9F74-4D91-AD38-66D0838B19C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C61C5781-66F4-47B7-9F68-CF5D58979B2A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C61C5781-66F4-47B7-9F68-CF5D58979B2A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C61C5781-66F4-47B7-9F68-CF5D58979B2A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C61C5781-66F4-47B7-9F68-CF5D58979B2A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F720ECC-34AC-4681-AFF1-6AE09E1B99A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F720ECC-34AC-4681-AFF1-6AE09E1B99A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F720ECC-34AC-4681-AFF1-6AE09E1B99A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F720ECC-34AC-4681-AFF1-6AE09E1B99A8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D13655EB-063E-4A90-BB78-A38235120A36}
+	EndGlobalSection
+EndGlobal
