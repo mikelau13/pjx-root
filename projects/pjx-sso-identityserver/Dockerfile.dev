@@ -1,0 +1,21 @@
+FROM mcr.microsoft.com/dotnet/sdk:3.1
+
+WORKDIR /app
+
+# Copy project files
+COPY *.sln ./
+COPY *.csproj ./
+COPY . ./
+
+# Restore dependencies
+RUN dotnet restore
+
+# Build the project
+RUN dotnet build
+
+# Expose ports
+EXPOSE 80
+EXPOSE 443
+
+# Start development server with watch
+CMD ["dotnet", "watch", "run", "--urls", "https://0.0.0.0:443;http://0.0.0.0:80"]

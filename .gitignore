@@ -3,3 +3,22 @@
 .DS_Store
 .vscode
 *.ldb
+
+# Development container files that may contain local settings
+.devcontainer/docker-compose.override.yml
+.devcontainer/.env
+
+# Node modules in projects
+projects/*/node_modules/
+projects/*/npm-debug.log*
+projects/*/yarn-debug.log*
+projects/*/yarn-error.log*
+
+# .NET build outputs in projects
+projects/*/bin/
+projects/*/obj/
+projects/*/.vs/
+
+# Environment files
+projects/*/.env
+projects/*/.env.local

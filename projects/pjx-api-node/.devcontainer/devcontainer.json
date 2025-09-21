@@ -1,0 +1,40 @@
+{
+	"name": "PJX API Node.js",
+	"build": {
+		"dockerfile": "../Dockerfile.dev"
+	},
+	"workspaceFolder": "/app",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "18"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.vscode-typescript-next",
+				"ms-vscode.vscode-json",
+				"christian-kohler.path-intellisense",
+				"ms-vscode.vscode-eslint",
+				"ms-vscode.vscode-node-debug2",
+				"ms-vscode.vscode-restclient"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"editor.formatOnSave": true,
+				"typescript.preferences.includePackageJsonAutoImports": "auto"
+			}
+		}
+	},
+	"forwardPorts": [8081],
+	"portsAttributes": {
+		"8081": {
+			"label": "Node.js API Server",
+			"protocol": "http"
+		}
+	},
+	"postCreateCommand": "npm install",
+	"remoteUser": "node"
+}
