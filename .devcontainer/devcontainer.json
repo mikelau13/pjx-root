@@ -1,0 +1,63 @@
+{
+	"name": "PJX Root - Multi-service Development",
+	"dockerComposeFile": "../docker-compose.devcontainer.yml",
+	"service": "workspace",
+	"workspaceFolder": "/workspaces/pjx-root/pjx-root",
+	"shutdownAction": "stopCompose",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "18"
+		},
+		"ghcr.io/devcontainers/features/dotnet:1": {
+			"version": "3.1"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-dotnettools.csharp",
+				"ms-vscode.vscode-typescript-next",
+				"ms-vscode.vscode-json",
+				"bradlc.vscode-tailwindcss",
+				"GraphQL.vscode-graphql",
+				"ms-vscode.vscode-docker",
+				"ms-kubernetes-tools.vscode-kubernetes-tools"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash"
+			}
+		}
+	},
+	"forwardPorts": [3000, 4000, 5001, 5002, 6001, 8081],
+	"portsAttributes": {
+		"3000": {
+			"label": "React Web App",
+			"protocol": "http"
+		},
+		"4000": {
+			"label": "GraphQL Apollo Server",
+			"protocol": "http"
+		},
+		"5001": {
+			"label": "Identity Server HTTP",
+			"protocol": "http"
+		},
+		"5002": {
+			"label": "Identity Server HTTPS",
+			"protocol": "https"
+		},
+		"6001": {
+			"label": ".NET API",
+			"protocol": "http"
+		},
+		"8081": {
+			"label": "Node.js API",
+			"protocol": "http"
+		}
+	},
+	"postCreateCommand": "chmod +x .devcontainer/setup.sh && ./.devcontainer/setup.sh",
+	"remoteUser": "vscode"
+}

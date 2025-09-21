@@ -1,0 +1,43 @@
+{
+	"name": "PJX Web React",
+	"build": {
+		"dockerfile": "../Dockerfile.dev"
+	},
+	"workspaceFolder": "/app",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "18"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.vscode-typescript-next",
+				"bradlc.vscode-tailwindcss",
+				"es6-string-html",
+				"ms-vscode.vscode-json",
+				"formulahendry.auto-rename-tag",
+				"christian-kohler.path-intellisense",
+				"ms-vscode.vscode-eslint"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"editor.formatOnSave": true,
+				"editor.codeActionsOnSave": {
+					"source.fixAll.eslint": true
+				}
+			}
+		}
+	},
+	"forwardPorts": [3000],
+	"portsAttributes": {
+		"3000": {
+			"label": "React Development Server",
+			"protocol": "http"
+		}
+	},
+	"postCreateCommand": "npm install",
+	"remoteUser": "node"
+}

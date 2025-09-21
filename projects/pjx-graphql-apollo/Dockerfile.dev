@@ -1,0 +1,21 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Install development tools globally
+RUN npm install -g nodemon ts-node typescript
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 4000
+
+# Start development server
+CMD ["npm", "run", "dev"]

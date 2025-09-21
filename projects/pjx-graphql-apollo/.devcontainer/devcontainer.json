@@ -1,0 +1,40 @@
+{
+	"name": "PJX GraphQL Apollo Server",
+	"build": {
+		"dockerfile": "../Dockerfile.dev"
+	},
+	"workspaceFolder": "/app",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "18"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-vscode.vscode-typescript-next",
+				"GraphQL.vscode-graphql",
+				"ms-vscode.vscode-json",
+				"christian-kohler.path-intellisense",
+				"ms-vscode.vscode-eslint",
+				"apollographql.vscode-apollo"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"editor.formatOnSave": true,
+				"typescript.preferences.includePackageJsonAutoImports": "auto"
+			}
+		}
+	},
+	"forwardPorts": [4000],
+	"portsAttributes": {
+		"4000": {
+			"label": "GraphQL Apollo Server",
+			"protocol": "http"
+		}
+	},
+	"postCreateCommand": "npm install",
+	"remoteUser": "node"
+}

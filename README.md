@@ -79,13 +79,22 @@ WebReactLogin -right-> MVC : "redirect"
 
 ## Installation
 
+### Prerequisites
+
 You will need to ensure you have [Docker](https://docs.docker.com/) installed on your machine.
 
 - [Install Docker for Mac](https://docs.docker.com/docker-for-mac/install/)
 - [Install Docker for Windows](https://docs.docker.com/docker-for-windows/)
 - [Install Docker for Ubuntu](https://phoenixnap.com/kb/how-to-install-docker-on-ubuntu-18-04)
 
-Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. The is to make this the parent directory for the pjx projects.
+For **WSL Development Container support**, you'll also need:
+- [Visual Studio Code](https://code.visualstudio.com/)
+- [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+- [WSL 2](https://docs.microsoft.com/en-us/windows/wsl/install) (Windows users)
+
+### Repository Setup
+
+Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. This is to make this the parent directory for the pjx projects.
 
 
 ## How does it work?
@@ -105,6 +114,8 @@ helm install pjx-release helm-pjx/
 
 ## Running a solution
 
+### Option 1: Traditional Docker Compose
+
 To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
 
 ```bash
@@ -116,6 +127,35 @@ git clone https://github.com/mikelau13/pjx-sso-identityserver.git
 git clone https://github.com/mikelau13/pjx-web-react.git
 docker-compose -f ../docker-compose.yml up
 ```
+
+### Option 2: WSL Development Container (Recommended for Development)
+
+For development with full IDE support, debugging, and hot-reload capabilities:
+
+1. **Open in VS Code Dev Container:**
+   - Clone this repository to your WSL file system
+   - Open the repository in VS Code
+   - When prompted, click "Reopen in Container" or run `Ctrl+Shift+P` → "Dev Containers: Reopen in Container"
+
+2. **Start all services:**
+   ```bash
+   docker-compose -f docker-compose.devcontainer.yml up
+   ```
+
+3. **Individual Service Development:**
+   Each service has its own `.devcontainer` folder. You can open any individual service in its own container:
+   - `projects/pjx-web-react/` - React frontend development
+   - `projects/pjx-api-node/` - Node.js API development
+   - `projects/pjx-graphql-apollo/` - GraphQL server development
+   - `projects/pjx-api-dotnet/` - .NET API development
+   - `projects/pjx-sso-identityserver/` - Identity server development
+
+**Benefits of Dev Container approach:**
+- Full IntelliSense and debugging support
+- Hot reload for all services
+- Consistent development environment across team members
+- Integrated terminal access to each service
+- Pre-configured extensions and settings
 
 Execute this command to stop them:
 

@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/universal:2-linux
+    volumes:
+      - ..:/workspaces/pjx-root:cached
+      - /var/run/docker.sock:/var/run/docker-host.sock
+    command: sleep infinity
+    networks:
+      - pjx-network
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker-host.sock
+
+  pjx-graphql-apollo:
+    build:
+      context: ./projects/pjx-graphql-apollo
+      dockerfile: Dockerfile.dev
+    container_name: pjx-graphql-apollo-dev
+    volumes:
+      - ./projects/pjx-graphql-apollo:/app:cached
+      - /app/node_modules
+    ports:
+      - "4000:4000"
+    networks:
+      - pjx-network
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    command: npm run dev
+
+  pjx-api-dotnet:
+    build:
+      context: ./projects/pjx-api-dotnet
+      dockerfile: Dockerfile.dev
+    container_name: pjx-api-dotnet-dev
+    volumes:
+      - ./projects/pjx-api-dotnet:/app:cached
+    ports:
+      - "6001:80"
+    networks:
+      - pjx-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
+
+  pjx-api-node:
+    build:
+      context: ./projects/pjx-api-node
+      dockerfile: Dockerfile.dev
+    container_name: pjx-api-node-dev
+    volumes:
+      - ./projects/pjx-api-node:/app:cached
+      - /app/node_modules
+    ports:
+      - "8081:8081"
+    networks:
+      - pjx-network
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    command: npm start
+
+  pjx-web-react:
+    build:
+      context: ./projects/pjx-web-react
+      dockerfile: Dockerfile.dev
+    container_name: pjx-web-react-dev
+    volumes:
+      - ./projects/pjx-web-react:/app:cached
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - pjx-network
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_GRAPHQL_URI=http://localhost:4000/graphql
+      - REACT_APP_API_URI=http://localhost:6001
+      - REACT_APP_SSO_URI=https://localhost:5002
+    stdin_open: true
+    tty: true
+    command: npm start
+
+  pjx-sso-identityserver:
+    build:
+      context: ./projects/pjx-sso-identityserver
+      dockerfile: Dockerfile.dev
+    container_name: pjx-sso-identityserver-dev
+    volumes:
+      - ./projects/pjx-sso-identityserver:/app:cached
+    ports:
+      - "5001:80"
+      - "5002:443"
+    networks:
+      - pjx-network
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=https://+:443;http://+:80
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=password
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/pjx-sso-identityserver.rsa_2048.cert.pfx
+      - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
+      - PJX_SSO__PASSWORD=password
+
+networks:
+  pjx-network:
+    driver: bridge

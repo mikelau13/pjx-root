@@ -1,0 +1,43 @@
+{
+	"name": "PJX SSO Identity Server",
+	"build": {
+		"dockerfile": "../Dockerfile.dev"
+	},
+	"workspaceFolder": "/app",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/dotnet:1": {
+			"version": "3.1"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-dotnettools.csharp",
+				"ms-vscode.vscode-json",
+				"christian-kohler.path-intellisense",
+				"ms-dotnettools.vscode-dotnet-runtime",
+				"ms-vscode.vscode-restclient"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash",
+				"editor.formatOnSave": true,
+				"dotnet.defaultSolution": "pjx-sso-identityserver.sln"
+			}
+		}
+	},
+	"forwardPorts": [80, 443],
+	"portsAttributes": {
+		"80": {
+			"label": "Identity Server HTTP",
+			"protocol": "http"
+		},
+		"443": {
+			"label": "Identity Server HTTPS",
+			"protocol": "https"
+		}
+	},
+	"postCreateCommand": "dotnet restore",
+	"remoteUser": "vscode"
+}
