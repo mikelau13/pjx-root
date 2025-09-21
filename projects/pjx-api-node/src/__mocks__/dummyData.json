@@ -1,0 +1,6 @@
+[
+    {"id": 1, "name": "default", "city": "Mike"},
+    {"id": 2, "name": "toronto", "city": "Toronto"},
+    {"id": 3, "name": "new-york", "city": "New York"},
+    {"id": 4, "name": "markham", "city": "Markham"}
+]

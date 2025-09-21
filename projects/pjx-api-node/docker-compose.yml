@@ -1,0 +1,19 @@
+version: '3.8'
+
+networks:
+  pjx-network:
+    name: pjx-network
+    driver: bridge
+
+services:
+  pjx-api-node:
+    build:
+      context: .
+    container_name: pjx-api-node
+    # command: npm start
+    volumes:
+      - .:/usr/api
+    ports:
+      - 8081:8081
+    networks:
+      - pjx-network

@@ -1,0 +1,22 @@
+# ./docker-compose.yml
+
+version: '3.8'
+
+services:
+  pjx-graphql:
+    build:
+      context: .
+    #  dockerfile: Dockerfile.dev
+    container_name: pjx-graphql-apollo-container
+    # command: npm run dev
+    volumes:
+      - .:/usr/api
+    ports:
+      - 4000:4000
+    networks:
+      - pjx-network
+
+networks:
+  pjx-network:
+    name: pjx-network
+    driver: bridge

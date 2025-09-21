@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  pjx-api-dotnet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pjx-api-dotnet-dev
+    ports:
+      - 6001:80
+    networks:
+      - pjx-network
+    environment:
+      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
+
+networks:
+  pjx-network:
+    name: pjx-network
+    driver: bridge
