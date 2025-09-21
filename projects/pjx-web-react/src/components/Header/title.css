@@ -1,0 +1,16 @@
+.h1 {
+    margin: 10px
+}
+
+@media screen and (max-width: 400px) {
+    .h1 {
+        margin: 15px
+    }
+}
+
+@media screen and (max-width: 992px) {
+    .h1 {
+        margin: 20px
+    }
+}
+

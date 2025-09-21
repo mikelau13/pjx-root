@@ -1,0 +1,17 @@
+import React, { FunctionComponent, ComponentType } from 'react';
+import AuthService from '../services/authService';
+
+interface UserProps {
+  authService: AuthService,
+  component: ComponentType
+}
+
+const withUser: FunctionComponent<UserProps> = props => {
+  const { component, authService } = props;
+
+  return (
+    <component />
+  );
+}
+
+export default withUser;

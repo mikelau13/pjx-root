@@ -1,0 +1,27 @@
+.register { 
+    display: flex;
+    flex-wrap: wrap;
+    color: red;
+    font-size: 12px;
+}
+
+.break {
+    display: flex;
+    flex-basis: 100%;
+    margin-top: 10px;
+}
+
+
+@media screen and (max-width: 992px) {
+    body {
+        background-color: blue;
+    }
+    .register { font-size: 24px; }
+}
+
+@media screen and (max-width: 400px) {
+    body {
+        background-color: red;
+    }
+    .register { font-size: 18px; }
+}
