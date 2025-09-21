@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Pjx_CreateCertificates": {
+      "commandName": "Project",
+      "commandLineArgs": "\"localhost\" \"password\" \"RSA\""
+    }
+  }
+}
