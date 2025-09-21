@@ -17,7 +17,7 @@ services:
 
   pjx-api-dotnet:
     build:
-      context: ./projects/pjx-api-dotnet/src/Pjx_Api/
+      context: ./pjx-api-dotnet/src/Pjx_Api/
       dockerfile: Dockerfile
     container_name: pjx-api-dotnet-dev
     volumes:

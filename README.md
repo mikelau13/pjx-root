@@ -14,7 +14,7 @@ To run `pjx-root` you will need the following projects:
 
 - [pjx-api-node](https://github.com/mikelau13/pjx-api-node) - Api backend developed with TypeScript to fetch data and manage business logic.
 
-- [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
+- [pjx-api-dotnet](./pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic. **[INTEGRATED]**
 
 Architecture overview looks like this: 
 ![pjx Architecture Overview](/images/pjx-overview.png)
@@ -90,9 +90,13 @@ Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. The is to make thi
 
 ## How does it work?
 
-Once you've cloned this repo you will see an empty folder `/projects`.
+Once you've cloned this repo you will see an empty folder `/projects` and an integrated `/pjx-api-dotnet` folder.
 
-This folder contains other cloned github repos, where each repo represents a dockerized project. (ie. api, Apollo server, web client, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
+**Integrated Components:**
+- `pjx-api-dotnet` - Now integrated directly into this repository using git subtree
+
+**External Components (cloned at runtime):**
+The `projects` folder contains other cloned github repos, where each repo represents a dockerized project. (ie. Apollo server, web client, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
 
 
 ## Helm Charts
@@ -105,22 +109,24 @@ helm install pjx-release helm-pjx/
 
 ## Running a solution
 
-To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
+To run the `pjx` solution, clone the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
+
+**Note**: `pjx-api-dotnet` is now integrated into this repository and no longer needs to be cloned separately.
 
 ```bash
 cd ./projects
 git clone https://github.com/mikelau13/pjx-graphql-apollo.git
 git clone https://github.com/mikelau13/pjx-api-node.git
-git clone https://github.com/mikelau13/pjx-api-dotnet.git
 git clone https://github.com/mikelau13/pjx-sso-identityserver.git
 git clone https://github.com/mikelau13/pjx-web-react.git
-docker-compose -f ../docker-compose.yml up
+cd ..
+docker-compose up
 ```
 
 Execute this command to stop them:
 
 ```bash
-$ docker-compose -f ../docker-compose.yml down
+docker-compose down
 ```
 
 On development environment, you might want to first prune all containers to avoid any conflicts:
