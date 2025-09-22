@@ -132,10 +132,13 @@ docker-compose -f ../docker-compose.yml up
 
 For development with full IDE support, debugging, and hot-reload capabilities:
 
-1. **Open in VS Code Dev Container:**
+1a. **Open in VS Code Dev Container:**
    - Clone this repository to your WSL file system
    - Open the repository in VS Code
    - When prompted, click "Reopen in Container" or run `Ctrl+Shift+P` → "Dev Containers: Reopen in Container"
+
+1b. **Or open folder directly from WSL command line**
+   - `devcontainers@AWMD-48MYC44:/mnt/f/repos/pjx$ code .`
 
 2. **Start all services:**
    ```bash
@@ -209,4 +212,5 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 ![pjx sso swagger](/images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
 ![pjx html responsive](/images/mobile_desktop.png)
+
 
