@@ -18,17 +18,19 @@ server.get('/', function(req, res, next) {
   return next();
 });
 
-server.get('/healthcheck', (req, res) => {
+server.get('/healthcheck', (req, res, next) => {
   res.setHeader(
     'cache-control',
     'no-cache, no-store, max-age=0, must-revalidate'
   );
   console.log('healthcheck');
   res.send('success');
+  return next();
 });
 
-server.get('/crash', (req, res) => {
-  throw new Error('Test error handling.'); 
+server.get('/crash', (req, res, next) => {
+  throw new Error('Test error handling.');
+  return next();
 });
 
 // setup routes by methods
@@ -40,9 +42,9 @@ server.listen(8081, function() {
   console.log('🚀  %s listening at %s', server.name, server.url);
 });
 
-process.on("uncaughtException", (options, error) => { 
-  if (error && error.stack) console.log("EXCEPTION:", error.stack); 
-  else console.log("EXCEPTION:", options); 
+process.on("uncaughtException", (error: Error) => {
+  if (error && error.stack) console.log("EXCEPTION:", error.stack);
+  else console.log("EXCEPTION:", error);
 });
 
 server.on('InternalServer', function(req, res, err, callback) {
