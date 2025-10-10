@@ -44,6 +44,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
+    working_dir: /app/src/Pjx_Api
+    command: ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:80"]
 
   pjx-api-node:
     build:

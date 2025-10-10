@@ -92,7 +92,8 @@ namespace IdentityServerAspNetIdentity
                         options.AddPolicy("CorsPolicy",
                             builder => builder.WithOrigins("http://localhost:3000")
                             .AllowAnyMethod()
-                            .AllowAnyHeader());
+                            .AllowAnyHeader()
+                            .AllowCredentials());
                     });
             // uncomment to enable Google+ API
             //services.AddAuthentication()

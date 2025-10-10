@@ -4,14 +4,13 @@ WORKDIR /app
 
 # Copy project files
 COPY *.sln ./
-COPY *.csproj ./
 COPY . ./
 
 # Restore dependencies
-RUN dotnet restore
+RUN dotnet restore pjx-sso-identityserver.sln
 
 # Build the project
-RUN dotnet build
+RUN dotnet build pjx-sso-identityserver.sln
 
 # Expose ports
 EXPOSE 80

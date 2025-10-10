@@ -37,4 +37,9 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="3.1.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Pjx.CalendarLibrary\Pjx.CalendarLibrary.csproj" />
+    <ProjectReference Include="..\Pjx.CalendarEntity\Pjx.CalendarEntity.csproj" />
+  </ItemGroup>
+
 </Project>
