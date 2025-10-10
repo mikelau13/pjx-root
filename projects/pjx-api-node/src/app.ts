@@ -30,7 +30,6 @@ server.get('/healthcheck', (req, res, next) => {
 
 server.get('/crash', (req, res, next) => {
   throw new Error('Test error handling.');
-  return next();
 });
 
 // setup routes by methods
