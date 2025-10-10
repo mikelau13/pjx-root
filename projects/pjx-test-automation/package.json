@@ -1,0 +1,22 @@
+{
+  "name": "pjx-test-automation",
+  "version": "1.0.0",
+  "description": "Test automation for PJX project using Chrome DevTools MCP",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/test-homepage.js",
+    "test:playwright": "node tests/test-homepage-playwright.js",
+    "install-playwright": "npm install --no-bin-links @playwright/test && node node_modules/@playwright/test/cli.js install chromium"
+  },
+  "keywords": [
+    "test",
+    "automation",
+    "chrome-devtools",
+    "playwright"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}
