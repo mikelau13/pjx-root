@@ -2,7 +2,7 @@
 	"name": "PJX Root - Multi-service Development",
 	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "workspace",
-	"workspaceFolder": "/workspaces/pjx-root/pjx-root",
+	"workspaceFolder": "/workspaces/pjx-root",
 	"shutdownAction": "stopCompose",
 	"features": {
 		"ghcr.io/devcontainers/features/git:1": {},
@@ -12,7 +12,17 @@
 			"version": "18"
 		},
 		"ghcr.io/devcontainers/features/dotnet:1": {
-			"version": "3.1"
+			"version": "8.0",
+			"installUsingApt": true
+		},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"configureZshAsDefaultShell": true,
+			"installOhMyZsh": true,
+			"upgradePackages": true,
+			"username": "automatic",
+			"uid": "automatic",
+			"gid": "automatic"
 		}
 	},
 	"customizations": {
@@ -59,5 +69,6 @@
 		}
 	},
 	"postCreateCommand": "chmod +x .devcontainer/setup.sh && ./.devcontainer/setup.sh",
-	"remoteUser": "vscode"
+	"remoteUser": "codespace",
+	"updateRemoteUserUID": true
 }

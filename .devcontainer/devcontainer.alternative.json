@@ -1,0 +1,70 @@
+{
+	"name": "PJX Root - Multi-service Development (Alternative)",
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+	"workspaceFolder": "/workspaces/pjx-root",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "18"
+		},
+		"ghcr.io/devcontainers/features/dotnet:1": {
+			"version": "8.0"
+		},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"configureZshAsDefaultShell": true,
+			"installOhMyZsh": true,
+			"upgradePackages": true,
+			"username": "vscode",
+			"uid": "1000",
+			"gid": "1000"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-dotnettools.csharp",
+				"ms-vscode.vscode-typescript-next",
+				"ms-vscode.vscode-json",
+				"bradlc.vscode-tailwindcss",
+				"GraphQL.vscode-graphql",
+				"ms-vscode.vscode-docker",
+				"ms-kubernetes-tools.vscode-kubernetes-tools"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash"
+			}
+		}
+	},
+	"forwardPorts": [3000, 4000, 5001, 5002, 6001, 8081],
+	"portsAttributes": {
+		"3000": {
+			"label": "React Web App",
+			"protocol": "http"
+		},
+		"4000": {
+			"label": "GraphQL Apollo Server",
+			"protocol": "http"
+		},
+		"5001": {
+			"label": "Identity Server HTTP",
+			"protocol": "http"
+		},
+		"5002": {
+			"label": "Identity Server HTTPS",
+			"protocol": "https"
+		},
+		"6001": {
+			"label": ".NET API",
+			"protocol": "http"
+		},
+		"8081": {
+			"label": "Node.js API",
+			"protocol": "http"
+		}
+	},
+	"postCreateCommand": "chmod +x .devcontainer/setup.sh && ./.devcontainer/setup.sh",
+	"remoteUser": "vscode"
+}

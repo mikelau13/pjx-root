@@ -30,11 +30,13 @@ fi
 
 echo "Restoring .NET projects..."
 if [ -d "/workspaces/pjx-root/projects/pjx-api-dotnet" ]; then
+    echo "Restoring pjx-api-dotnet..."
     cd /workspaces/pjx-root/projects/pjx-api-dotnet && dotnet restore
 fi
 
 if [ -d "/workspaces/pjx-root/projects/pjx-sso-identityserver" ]; then
-    cd /workspaces/pjx-root/projects/pjx-sso-identityserver && dotnet restore
+    echo "Restoring pjx-sso-identityserver..."
+    cd /workspaces/pjx-root/projects/pjx-sso-identityserver && dotnet restore IdentityServerAspNetIdentity.csproj
 fi
 
 cd /workspaces/pjx-root
