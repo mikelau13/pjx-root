@@ -23,7 +23,8 @@
 			"username": "automatic",
 			"uid": "automatic",
 			"gid": "automatic"
-		}
+		},
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
 	},
 	"customizations": {
 		"vscode": {
