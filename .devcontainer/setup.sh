@@ -1,51 +1,58 @@
 #!/bin/bash
+set -euo pipefail
 
-echo "Setting up PJX development environment..."
+# Resolve the repo root from this script's own location so the paths cannot
+# drift out of sync with the devcontainer mount again.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Install global npm packages that might be useful
+for proj in pjx-web-react pjx-api-node pjx-graphql-apollo; do
+    dir="${REPO_ROOT}/projects/${proj}"
+    if [ -e "${dir}/node_modules" ] && [ ! -w "${dir}/node_modules" ]; then
+        echo "!! ${proj}/node_modules is not writable by $(whoami) — likely root-owned." >&2
+        echo "   Fix on the host: sudo rm -rf projects/${proj}/node_modules" >&2
+        exit 1
+    fi
+done
+
+echo "Setting up PJX development environment (root: ${REPO_ROOT})..."
+
 npm install -g nodemon ts-node typescript
 
-# Set up git hooks or any other initialization
-echo "Setting up git configuration..."
 git config --global init.defaultBranch main
 git config --global core.autocrlf input
 
-# Install dependencies for all Node.js projects
-echo "Installing dependencies for Node.js projects..."
+# Node projects
+for proj in pjx-web-react pjx-api-node pjx-graphql-apollo; do
+    dir="${REPO_ROOT}/projects/${proj}"
+    if [ -f "${dir}/package.json" ]; then
+        echo "==> npm install: ${proj}"
+        (cd "${dir}" && npm install)
+    else
+        echo "!! SKIPPED ${proj} — no package.json at ${dir}" >&2
+    fi
+done
 
-if [ -d "/workspaces/pjx-root/projects/pjx-web-react" ]; then
-    echo "Installing dependencies for pjx-web-react..."
-    cd /workspaces/pjx-root/projects/pjx-web-react && npm install
-fi
+# .NET projects
+for proj in pjx-api-dotnet pjx-sso-identityserver; do
+    dir="${REPO_ROOT}/projects/${proj}"
+    if [ ! -d "${dir}" ]; then
+        echo "!! SKIPPED ${proj} — directory not found at ${dir}" >&2
+        continue
+    fi
 
-if [ -d "/workspaces/pjx-root/projects/pjx-api-node" ]; then
-    echo "Installing dependencies for pjx-api-node..."
-    cd /workspaces/pjx-root/projects/pjx-api-node && npm install
-fi
+    # A bare `dotnet restore` fails with MSB1011 when a folder holds both a
+    # .sln and a .csproj (pjx-sso-identityserver does). Name the target.
+    target="$(find "${dir}" -maxdepth 1 -name '*.sln' | head -1)"
+    [ -n "${target}" ] || target="$(find "${dir}" -maxdepth 1 -name '*.csproj' | head -1)"
 
-if [ -d "/workspaces/pjx-root/projects/pjx-graphql-apollo" ]; then
-    echo "Installing dependencies for pjx-graphql-apollo..."
-    cd /workspaces/pjx-root/projects/pjx-graphql-apollo && npm install
-fi
+    if [ -z "${target}" ]; then
+        echo "!! SKIPPED ${proj} — no .sln or .csproj in ${dir}" >&2
+        continue
+    fi
 
-echo "Restoring .NET projects..."
-if [ -d "/workspaces/pjx-root/projects/pjx-api-dotnet" ]; then
-    cd /workspaces/pjx-root/projects/pjx-api-dotnet && dotnet restore
-fi
+    echo "==> dotnet restore: ${proj} ($(basename "${target}"))"
+    (cd "${dir}" && dotnet restore "$(basename "${target}")")
+done
 
-if [ -d "/workspaces/pjx-root/projects/pjx-sso-identityserver" ]; then
-    cd /workspaces/pjx-root/projects/pjx-sso-identityserver && dotnet restore
-fi
-
-cd /workspaces/pjx-root
-
-echo "Setup complete!"
-echo ""
-echo "Available services:"
-echo "  - React Web App: http://localhost:3000"
-echo "  - GraphQL Apollo: http://localhost:4000"
-echo "  - .NET API: http://localhost:6001"
-echo "  - Node.js API: http://localhost:8081"
-echo "  - Identity Server: https://localhost:5002"
-echo ""
-echo "To start all services: docker-compose -f docker-compose.devcontainer.yml up"
+echo "Setup complete."

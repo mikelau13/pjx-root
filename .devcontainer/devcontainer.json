@@ -1,18 +1,19 @@
 {
+	"runServices": ["workspace"],
 	"name": "PJX Root - Multi-service Development",
 	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "workspace",
-	"workspaceFolder": "/workspaces/pjx-root/pjx-root",
+	"workspaceFolder": "/workspaces/pjx-root",
 	"shutdownAction": "stopCompose",
 	"features": {
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "18"
 		},
-		"ghcr.io/devcontainers/features/dotnet:1": {
-			"version": "3.1"
+		"ghcr.io/devcontainers/features/dotnet:2": {
+			"version": "8.0"
 		}
 	},
 	"customizations": {
