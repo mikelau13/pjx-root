@@ -62,7 +62,6 @@ services:
     ports:
       - 5001:80
       - 5002:443
-      - 443:443
     networks:
       - pjx-network
     environment:

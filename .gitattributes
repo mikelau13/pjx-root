@@ -1,0 +1,8 @@
+# This repo was authored on Windows and is CRLF throughout. Shell scripts must
+# be LF or the kernel cannot resolve the shebang interpreter (exit 127,
+# reported misleadingly as "not found").
+*.sh text eol=lf
+
+# Keep binary files from being mangled by any normalization.
+*.pfx binary
+*.png binary

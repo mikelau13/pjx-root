@@ -2,15 +2,15 @@ version: '3.8'
 
 services:
   workspace:
-    image: mcr.microsoft.com/devcontainers/universal:2-linux
+    build:
+      context: .devcontainer
+      dockerfile: Dockerfile
     volumes:
-      - ..:/workspaces/pjx-root:cached
+      - .:/workspaces/pjx-root:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
     command: sleep infinity
     networks:
       - pjx-network
-    environment:
-      - DOCKER_HOST=unix:///var/run/docker-host.sock
 
   pjx-graphql-apollo:
     build:
