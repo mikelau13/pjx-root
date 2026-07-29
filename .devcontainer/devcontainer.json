@@ -1,5 +1,8 @@
 {
 	"runServices": ["workspace"],
+	"remoteEnv": {
+		"HOST_PROJECT_PATH": "${localWorkspaceFolder}"
+	},
 	"name": "PJX Root - Multi-service Development",
 	"dockerComposeFile": "../docker-compose.devcontainer.yml",
 	"service": "workspace",
@@ -32,33 +35,13 @@
 			}
 		}
 	},
-	"forwardPorts": [3000, 4000, 5001, 5002, 6001, 8081],
-	"portsAttributes": {
-		"3000": {
-			"label": "React Web App",
-			"protocol": "http"
-		},
-		"4000": {
-			"label": "GraphQL Apollo Server",
-			"protocol": "http"
-		},
-		"5001": {
-			"label": "Identity Server HTTP",
-			"protocol": "http"
-		},
-		"5002": {
-			"label": "Identity Server HTTPS",
-			"protocol": "https"
-		},
-		"6001": {
-			"label": ".NET API",
-			"protocol": "http"
-		},
-		"8081": {
-			"label": "Node.js API",
-			"protocol": "http"
-		}
+	// With docker-outside-of-docker, app containers publish directly on the
+    // host, so VS Code forwarding is redundant — and it BINDS those host ports
+    // on 127.0.0.1, which collides with the containers trying to publish them.
+	"otherPortsAttributes": {
+			"onAutoForward": "ignore"
 	},
 	"postCreateCommand": "chmod +x .devcontainer/setup.sh && ./.devcontainer/setup.sh",
+	"postStartCommand": "./.devcontainer/postStart.sh",
 	"remoteUser": "vscode"
 }

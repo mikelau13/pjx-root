@@ -5,7 +5,17 @@ Plan to bring pjx-root's development environment up to the architecture used by
 Grafana/OpenTelemetry observability stack, a scripted developer workflow, and a
 devcontainer image carrying the Kubernetes/Helm toolchain.
 
-**Status: DRAFT — awaiting review. Nothing has been executed.**
+## Progress
+
+| Phase | Status |
+|---|---|
+| 0 — Foundation | ✅ **Done** (merged, PR #15). Nine defects; see [Step 3b](phase-0-foundation.md#step-3b--nine-defects-found-during-execution) |
+| 1 — Script layer | 🔨 in progress |
+| 2–11, 8 | not started |
+
+Phase 0 absorbed part of Phase 6 out of necessity — the `universal:2-linux` base
+image had to be replaced before Docker could work inside the container at all.
+Phase 6 is correspondingly smaller; see the note at the top of its doc.
 
 ## How this plan is meant to be used
 
@@ -208,8 +218,13 @@ roughly $60–70/month running, ~$25 with the cluster stopped between demos.
 
 ## Working conventions
 
-- **Branch per phase**, off `master`: `feature/arch-phase-0-foundation`, etc.
+- **One branch per phase**, off `master`, merged via PR before the next phase
+  starts. Any descriptive name works — Phase 0 shipped as `dev_fix_devcontainer`.
   Do not commit directly to `master`.
+- **Commit after every numbered step, and push the branch early.** Phase 1's work
+  lived only in the working tree and was destroyed by a `sudo rm -rf` aimed at the
+  wrong namespace; it was recoverable only via VS Code's local file history.
+  `git push -u origin <branch>` costs nothing.
 - **Verify before merging.** Every phase doc ends with a `## Verify` section.
   If it does not pass, do not proceed to the next phase.
 - **Rollback** is documented per phase. Phases 0–3 and 5–7 are revertible with
