@@ -1,5 +1,5 @@
-# clean.sh — destructive, so it confirms first. This mirrors the biggest footgun in CloudDevEnvironment, where docker compose down silently wipes seeded databases.
 #!/bin/bash
+# clean.sh — destructive, so it confirms first. This mirrors the biggest footgun in CloudDevEnvironment, where docker compose down silently wipes seeded databases.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
