@@ -9,6 +9,32 @@ the container.
 
 **Depends on:** Phase 4 (the image pins the .NET SDK version).
 
+> ## The base swap already happened, in Phase 0
+>
+> `universal:2-linux` had to go earlier than planned. It bakes in
+> docker-in-docker, whose nested `dockerd` claims `/var/run/docker.sock` and
+> defeats the host-socket mount entirely — so no feature configuration could make
+> Docker work inside the container. It also shipped an expired Yarn apt key that
+> broke every feature install, used a `codespace` user instead of `vscode`, and
+> weighed 15.9 GB.
+>
+> `.devcontainer/Dockerfile` therefore already exists:
+>
+> ```dockerfile
+> FROM mcr.microsoft.com/devcontainers/base:jammy
+> ```
+>
+> **Already done, so skip:** Step 2's move from `image:` to `build:` (compose
+> already builds from that Dockerfile), `remoteUser: vscode`, and the `dotnet:2`
+> feature at `8.0`. Step 3's Node question was also settled — Node 18 via the
+> feature, deliberately not 20.
+>
+> **What remains:** replacing `base:jammy` + features with the pinned,
+> purpose-built Dockerfile below — the Kubernetes/Helm toolchain, `azure-cli`, and
+> explicit tool versions. Reconsider only whether hand-rolling the Node and .NET
+> installs is worth it when the features already work; the argument for doing so is
+> version pinning, not capability.
+
 ```bash
 git checkout -b feature/arch-phase-6-devcontainer-image
 ```

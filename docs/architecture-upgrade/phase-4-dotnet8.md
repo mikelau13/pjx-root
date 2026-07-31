@@ -95,7 +95,16 @@ Add `global.json` at the repo root:
 
 Rebuild the container, then `dotnet --list-sdks` → `8.0.x`.
 
-### You should not need the 3.1 SDK
+### The 3.1 SDK is not needed — confirmed in Phase 0
+
+Phase 0 verified this rather than assuming it: the devcontainer installs only
+`dotnet:2` at version `8.0` (8.0.423), and `dotnet restore` on
+`pjx-sso-identityserver.sln` succeeded with warning **NETSDK1138**. So
+`validate.sh` keeps **both** .NET projects in `DOTNET_PROJECTS`, and the
+`DOCKER_ONLY_PROJECTS` fallback below is unnecessary — it has been removed from
+[Phase 1](phase-1-script-layer.md).
+
+### Original reasoning (retained)
 
 The .NET 8 SDK can build `netcoreapp3.1` targets — it acquires the targeting
 pack as a NuGet reference assembly. It emits warning **NETSDK1138** ("target
@@ -227,37 +236,20 @@ Paste that output into the commit message. It documents the deferral against
 real data, and re-running it later is how you decide when Phase 8 stops being
 optional.
 
-### Exclude SSO from local SDK builds
+### No `validate.sh` change needed
 
-If step 1's `dotnet build` check failed, exclude SSO from `validate.sh` so a
-missing 3.1 SDK does not fail the whole sweep. In
-`local/scripts/validate.sh`, change the project lists:
+Earlier drafts had a `DOCKER_ONLY_PROJECTS` list here, to exclude SSO from local
+SDK builds in case the 8.0 SDK could not handle its `netcoreapp3.1` target.
+**Phase 0 proved it can** — `dotnet restore` on `pjx-sso-identityserver.sln`
+succeeds under SDK 8.0.423 with warning NETSDK1138.
 
-```bash
-NODE_PROJECTS=(pjx-web-react pjx-api-node pjx-graphql-apollo)
-DOTNET_PROJECTS=(pjx-api-dotnet)
-# pjx-sso-identityserver is netcoreapp3.1 and builds only inside its container
-# image (see Phase 8). Build it with:
-#   docker compose -f docker-compose.devcontainer.yml build pjx-sso-identityserver
-DOCKER_ONLY_PROJECTS=(pjx-sso-identityserver)
-```
+So `validate.sh` keeps both .NET projects in `DOTNET_PROJECTS`, exactly as
+[Phase 1](phase-1-script-layer.md) writes it. Nothing to change.
 
-And handle the case explicitly rather than silently skipping — the silent-skip
-pattern is what hid the Phase 0 bug:
-
-```bash
-is_docker_only() {
-    local p
-    for p in "${DOCKER_ONLY_PROJECTS[@]}"; do [[ "$1" == "${p}" ]] && return 0; done
-    return 1
-}
-
-# inside the target loop, before the dotnet/node branch:
-if is_docker_only "${target}"; then
-    echo "   (${target} is netcoreapp3.1 — build via Docker, skipping local SDK)"
-    continue
-fi
-```
+> One wrinkle when you get here: `dotnet restore` on the SSO project resolves
+> `IdentityServer4.AspNetIdentity` 4.1.2, published for `netcoreapp3.1` — the same
+> TFM the project already targets, so that is fine. Only when
+> [Phase 8](phase-8-duende.md) moves SSO to `net8.0` does the package have to go.
 
 ---
 

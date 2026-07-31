@@ -160,12 +160,84 @@ ls projects/pjx-graphql-apollo/node_modules  | head -3
 ls projects/pjx-api-dotnet/src/Pjx_Api/obj/project.assets.json
 
 # 4. Nothing is holding host 443
-sudo lsof -i :443 || echo "443 free"
+# Run on the HOST, not in the container. Do NOT use `lsof -i :443`: it also
+# matches remote port 443, so any outbound HTTPS connection is a false positive.
+ss -tlnp | grep ':443 ' || echo "443 free"
 ```
 
 All four must pass before Phase 1.
 
 ---
+
+## Step 3b — Nine defects found during execution
+
+Written up **after** Phase 0 completed. Steps 1–3 were derived by reading files;
+every defect below was found only by running things. On a fresh clone these are
+already fixed — this section records why each change exists.
+
+The headline: **four of the nine traced to `universal:2-linux`**, and swapping
+the base image resolved them together. That swap is
+[Phase 6](phase-6-devcontainer-image.md)'s work, brought forward out of necessity.
+
+| # | Defect | Fix | Origin |
+|---|---|---|---|
+| 1 | `setup.sh` probed hardcoded paths that never existed → silent no-op | Derive `REPO_ROOT` from `BASH_SOURCE`; `set -euo pipefail`; warn on skip | pre-existing |
+| 2 | Mount `..` exposed the parent dir, incl. `CloudDevEnvironment` | Mount `.`; drop the doubled `workspaceFolder` | pre-existing |
+| 3 | IdentityServer published host `443` | Remove `- 443:443` | pre-existing |
+| 4 | `docker-in-docker` feature contradicted the host-socket mount | Swap to `docker-outside-of-docker` | pre-existing |
+| 5 | `universal:2-linux` ships a Yarn apt source with an expired GPG key → every feature install died at exit 100 | Base swap (below) | base image |
+| 6 | `remoteUser: vscode` — that user does not exist in `universal:2-linux` (it uses `codespace`) | Base swap → `vscode` exists | base image |
+| 7 | CRLF line endings → `#!/bin/bash\r`, reported misleadingly as "not found" (exit 127) | `sed -i 's/\r$//'`; `.gitattributes` with `*.sh text eol=lf` | pre-existing |
+| 8 | App containers wrote root-owned `node_modules`, `obj/`, `bin/` into the bind-mounted tree (378 entries) | `runServices: ["workspace"]`; `chown -R`; delete empty mountpoint dirs | pre-existing |
+| 9 | Bare `dotnet restore` is ambiguous where a `.sln` and `.csproj` share a folder (MSB1011) | Resolve the target explicitly, `.sln` first | **introduced by step 2 of this doc** |
+
+Plus one that survived three separate fix attempts:
+
+**`universal:2-linux` bakes in docker-in-docker.** Its
+`/usr/local/share/docker-init.sh` starts a nested `dockerd`, which claims
+`/var/run/docker.sock` and shadows the `docker-outside-of-docker` feature
+entirely — its socat proxy never ran. Symptom: `docker ps` inside the container
+succeeded but listed nothing, and `docker version` reported server `28.1.1`
+against the host's `29.5.3`. Swapping the feature did not help, nor did deleting
+the derived image; the daemon comes from the base, not from any feature.
+
+### The base swap
+
+`.devcontainer/Dockerfile`:
+
+```dockerfile
+FROM mcr.microsoft.com/devcontainers/base:jammy
+```
+
+That single change fixed defects 5, 6 and the nested daemon, and took the image
+from **15.9 GB to ~1 GB**. With it:
+
+```jsonc
+"remoteUser": "vscode",
+"ghcr.io/devcontainers/features/dotnet:2": { "version": "8.0" }
+```
+
+Only the 8.0 SDK is installed. `pjx-sso-identityserver` still targets
+`netcoreapp3.1` and restores fine under it (warning NETSDK1138), and runs from its
+own 3.1 container image — validating
+[Phase 6](phase-6-devcontainer-image.md)'s "one SDK" decision ahead of schedule.
+
+### Corrections to this document
+
+- **The rebuild command differs by where you are.** From the host it is "Dev
+  Containers: **Rebuild and Reopen in** Container"; only when already attached is
+  it "Rebuild Container". Use the cached variant — "Without Cache" is warranted
+  only when baked-in files must go.
+- **`sudo lsof -i :443` was the wrong check** — it matches *remote* port 443, and
+  it must run on the host. Corrected in Verify above.
+
+### Commit after every step
+
+Phase 0's nine fixes lived only in the working tree for hours. A `sudo rm -rf`
+aimed at the wrong namespace later destroyed the untracked Phase 1 work, which
+was only recoverable via VS Code's local history. **Commit after each numbered
+step, and push the branch early** — `git push -u origin <branch>` costs nothing
+and makes loss recoverable.
 
 ## Known issue you may hit
 

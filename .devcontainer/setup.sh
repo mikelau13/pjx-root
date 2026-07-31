@@ -55,4 +55,11 @@ for proj in pjx-api-dotnet pjx-sso-identityserver; do
     (cd "${dir}" && dotnet restore "$(basename "${target}")")
 done
 
+# Put the developer scripts on PATH for interactive shells.
+PROFILE_LINE='export PATH="$PATH:/workspaces/pjx-root/local/scripts"'
+if ! grep -qF "${PROFILE_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
+    echo "${PROFILE_LINE}" >> "${HOME}/.bashrc"
+    echo "Added local/scripts to PATH in ~/.bashrc"
+fi
+
 echo "Setup complete."

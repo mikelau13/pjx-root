@@ -505,9 +505,17 @@ Recorded here so it is not lost:
 - **[Phase 8](phase-8-duende.md) — SSO to Duende IdentityServer.** Not "not in
   this plan", but explicitly outside the mandatory path. Gate: before any
   production deployment
-- `oidc-client` 1.10.1 → `oidc-client-ts` (deprecated dependency)
-- `react-scripts` 3.4.3 → Vite or a current CRA (blocks Node 20, noted in
-  [Phase 6](phase-6-devcontainer-image.md))
+- **Frontend dependency debt in `pjx-web-react`** — three related pieces, sensibly
+  done together as one project:
+  - **Apollo Client 2 → `@apollo/client` v3.** `apollo-boost`, `apollo-client`,
+    `apollo-cache-inmemory`, `apollo-link-http` and `@apollo/react-hooks` all
+    collapse into one package. Today `@apollo/react-hooks@3.1.5` declares peer
+    `graphql@^14.3.1` against the project's `graphql@^15.3.0`, which is why
+    `projects/pjx-web-react/.npmrc` sets `legacy-peer-deps=true` (added in
+    Phase 0). That file is a workaround, not a fix.
+  - `oidc-client` 1.10.1 → `oidc-client-ts` (deprecated dependency)
+  - `react-scripts` 3.4.3 → Vite or a current CRA (blocks Node 20, noted in
+    [Phase 6](phase-6-devcontainer-image.md))
 - `README.md:104` claims `projects/` is gitignored; it is tracked (Decision D3)
 - `projects/pjx-api-node/Jenkinsfile` — delete once Actions is working
 - `pjx-dummy` templates — determine whether this is still needed or leftover
