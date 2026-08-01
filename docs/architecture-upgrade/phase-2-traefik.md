@@ -398,18 +398,44 @@ Add TLS and an HTTP→HTTPS redirect to each router's labels — for example on
       - "traefik.http.routers.pjx-web.tls=true"
       - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.localhost`)"
       - "traefik.http.routers.pjx-web-http.entrypoints=http"
-      - "traefik.http.routers.pjx-web-http.middlewares=to-https"
+      - "traefik.http.routers.pjx-web-http.middlewares=to-https@file"
 ```
 
-And define the redirect middleware once, on the Traefik service in
-`local/docker-compose.yml`:
+Note the `@file` suffix on the middleware — it is required, and the reason is the
+next step.
+
+And define the redirect middleware once, in the **file provider** —
+`local/central-router/config/middlewares.yml`:
 
 ```yaml
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.to-https.redirectscheme.permanent=false"
+http:
+  middlewares:
+    to-https:
+      redirectScheme:
+        scheme: https
+        permanent: false
 ```
+
+> **Do not define this via labels on the Traefik container.** The docker provider
+> runs with
+> `--providers.docker.constraints=Label(`traefik.constraint-label`, `pjx-public`)`,
+> and the Traefik container does not carry that label — so Traefik silently
+> filters out its own labels and the middleware is never created. The failure is
+> quiet: the redirect routers appear in the API but with
+>
+> ```json
+> "error": ["middleware \"to-https@docker\" does not exist"],
+> "status": "disabled"
+> ```
+>
+> and HTTP returns **404** rather than a redirect. Diagnose with
+> `curl -s http://localhost:9090/api/http/routers/pjx-web-http@docker`.
+>
+> Defining it in the file provider is also the better fit: a redirect rule is
+> shared infrastructure, not a property of any one container. It lives naturally
+> beside `tls.yml`, and Traefik reloads it live via
+> `--providers.file.watch=true` — no restart. Because it comes from a different
+> provider than the routers, references must be qualified: `to-https@file`.
 
 Repeat the four-label pattern for the other four services. Then update
 `WDS_SOCKET_PORT=443` for the React service.
@@ -417,18 +443,87 @@ Repeat the four-label pattern for the other four services. Then update
 > Keep `permanent=false` (a 302). A permanent 301 gets cached hard by browsers,
 > which is painful if you later need to debug something over plain HTTP.
 
-### Commit the CA, not the key
+### Verify step 3 before continuing
 
-```gitignore
-# Local TLS material — the CA cert is shared so teammates can trust it;
-# private keys never are.
-local/central-router/config/ca/rootCA-key.pem
-local/central-router/config/cert/*-key.pem
+Do not stack Step 4 (devcontainer hostnames) or Step 5 (OIDC) on unverified TLS —
+Step 5 is the most failure-prone part of this phase and you want a known-good
+base under it.
+
+**Run these on the HOST.** Two quirks to know:
+
+- `*.localhost` resolves to `::1` (IPv6 loopback) on most Linux systems. Traefik
+  publishes on `[::]` as well as `0.0.0.0`, so this works — but it explains
+  anything odd you see with IPv4-only tooling.
+- `mkcert -install` ran in the **devcontainer**, so the CA is in *that* trust
+  store, not the host's. Host `curl` will fail verification until you import the
+  CA (Step 4). Pass `--cacert` instead — it proves the chain without touching the
+  host trust store.
+
+```bash
+CFG=<repo>/local/central-router/config
+CA="$CFG/ca/rootCA.pem"
+CERT=$(ls "$CFG"/cert/*.pem | grep -v -- '-key' | head -1)
+
+# 1. Certificate covers BOTH the wildcard and the apex
+openssl x509 -in "$CERT" -noout -subject -ext subjectAltName
+#   → must list *.pjx.localhost AND pjx.localhost
+
+# 2. Handshake serves that cert and chains to your CA
+echo | openssl s_client -connect pjx.localhost:443 -servername pjx.localhost \
+  -CAfile "$CA" 2>&1 | grep -E 'Verify return code|subject=|issuer='
+#   → "Verify return code: 0 (ok)"
+
+# 3. HTTP redirects to HTTPS
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://pjx.localhost/
+#   → 302 https://pjx.localhost/
+
+# 4. All five services over HTTPS
+for h in pjx ql.pjx api.pjx node.pjx sso.pjx; do
+  printf '  %-20s %s\n' "$h.localhost" \
+    "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 --cacert "$CA" https://$h.localhost/)"
+done
+#   → 2xx/3xx; ql.pjx returns 400 (Apollo's "GET query missing" — it routed)
+
+# 5. TEN docker routers now, not five
+curl -s http://localhost:9090/api/http/routers | grep -o '"name":"[^"]*@docker"' | sort
+#   → each service has an HTTPS router AND an -http redirect router
 ```
 
-CloudDevEnvironment commits both halves. Do not copy that — commit the public
-CA certificate so others can import it, and keep every private key out of git.
-Anyone cloning regenerates their own leaf certs with the commands above.
+Check 5 catches a missed label fastest. Check 2 returning a non-zero verify code
+usually means `tls.yml` references filenames that do not exist — mkcert names
+files after the first SAN, e.g. `_wildcard.pjx.localhost+3.pem`.
+
+### Commit none of the TLS material
+
+```gitignore
+# Local TLS material. mkcert generates a per-machine CA, so none of this is
+# shareable: without rootCA-key.pem nobody else can sign with this CA, and
+# without the leaf key Traefik cannot serve it. Everyone runs mkcert locally —
+# see docs/architecture-upgrade/phase-2-traefik.md step 3.
+local/central-router/config/ca/
+local/central-router/config/cert/
+```
+
+CloudDevEnvironment commits both halves of its CA, including the private key.
+Do not copy that.
+
+An earlier draft of this doc said to commit the public `rootCA.pem` "so teammates
+can import it". That reasoning does not survive contact with how mkcert works:
+the CA is per-machine, and without `rootCA-key.pem` a cloner cannot sign anything
+with it, while the leaf certificate is useless without its key. They will run
+`mkcert` and generate their own CA regardless — so the committed public halves
+are dead weight that look authoritative and go stale.
+
+**Commit `tls.yml` and `middlewares.yml`** (config, no secrets) and ignore
+`ca/` and `cert/` wholesale. `tls.yml`'s filenames stay valid across machines
+because mkcert names files deterministically from the SAN list, so the same
+command produces `_wildcard.pjx.localhost+3.pem` for everyone.
+
+Verify before pushing:
+
+```bash
+git show --stat HEAD | grep -E 'key|\.pem' || echo "no key material committed"
+```
 
 ---
 

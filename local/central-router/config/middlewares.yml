@@ -1,0 +1,6 @@
+http:
+  middlewares:
+    to-https:
+      redirectScheme:
+        scheme: https
+        permanent: false
