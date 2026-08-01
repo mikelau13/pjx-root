@@ -10,7 +10,9 @@ for proj in pjx-web-react pjx-api-node pjx-graphql-apollo; do
     dir="${REPO_ROOT}/projects/${proj}"
     if [ -e "${dir}/node_modules" ] && [ ! -w "${dir}/node_modules" ]; then
         echo "!! ${proj}/node_modules is not writable by $(whoami) — likely root-owned." >&2
-        echo "   Fix on the host: sudo rm -rf projects/${proj}/node_modules" >&2
+        echo "   Docker creates it as root when mounting the /app/node_modules volume." >&2
+        echo "   Fix from a HOST terminal:" >&2
+        echo "     sudo chown -R \$(id -un):\$(id -gn) <host-path-to-repo>/projects" >&2
         exit 1
     fi
 done

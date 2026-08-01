@@ -231,6 +231,32 @@ own 3.1 container image — validating
 - **`sudo lsof -i :443` was the wrong check** — it matches *remote* port 443, and
   it must run on the host. Corrected in Verify above.
 
+### Guard against root-owned `node_modules`
+
+Defect 8 recurs whenever `node_modules` is missing and the app containers start:
+Docker needs a mountpoint for the `- /app/node_modules` anonymous volume and
+creates the directory **as root** inside the bind-mounted tree. A fresh clone or
+a git-based recovery triggers it, because `node_modules` is gitignored and does
+not come back.
+
+Add this to `setup.sh`'s Node loop so it fails with one actionable line instead of
+a 20-line npm `EACCES` trace:
+
+```bash
+    if [ -e "${dir}/node_modules" ] && [ ! -w "${dir}/node_modules" ]; then
+        echo "!! ${proj}/node_modules is not writable by $(whoami) — likely root-owned." >&2
+        echo "   Docker creates it as root when mounting the /app/node_modules volume." >&2
+        echo "   Fix from a HOST terminal:" >&2
+        echo "     sudo chown -R \$(id -un):\$(id -gn) <host-path-to-repo>/projects" >&2
+        exit 1
+    fi
+```
+
+**Prefer `chown` over `rm -rf` as the remedy.** The directories are empty, so
+there is nothing to delete, and `chown` is sufficient. It also avoids a recursive
+delete on a relative path — `projects/...` from the host and from the container
+are different trees, and that ambiguity has already destroyed this repo once.
+
 ### Commit after every step
 
 Phase 0's nine fixes lived only in the working tree for hours. A `sudo rm -rf`

@@ -54,8 +54,13 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:
-      - ./provisioning/dashboards/provider.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
-      - ./provisioning/dashboards:/otel-lgtm/custom-dashboards
+      # HOST_PROJECT_PATH for the same reason as Phase 1 Step 6a and Phase 2
+      # Step 1: the host daemon resolves bind-mount sources, so a relative path
+      # would resolve to a non-existent /workspaces/... path and Docker would
+      # mount an empty directory — Grafana would start with no dashboards.
+      # Fallback is `..` because this compose file lives in observability/.
+      - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards/provider.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
+      - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards:/otel-lgtm/custom-dashboards
       - grafana-data:/var/lib/grafana
     networks:
       - pjx-network

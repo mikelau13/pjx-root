@@ -20,14 +20,41 @@ git checkout -b feature/arch-phase-2-traefik
 
 ## Before you start: two hard constraints
 
-**1. CloudDevEnvironment cannot be running.** Its `central-router` claims host
-ports 80, 443, and 9090 — exactly what pjx's Traefik will claim. Stop it first:
+**1. CloudDevEnvironment cannot be running** — and stopping its containers is not
+enough. Its `central-router` claims host ports 80, 443 and 9090, and its
+`proxy.sh` leaves a **`simpleproxy` process on the host** that outlives the
+containers entirely.
 
 ```bash
+# containers
 docker ps --filter name=central-router --format '{{.Names}}'
-# if anything is listed:
 (cd /home/mike/projects/CloudDevEnvironment && docker compose -f local/docker-compose.yml down)
+
+# host processes — this is the one that bites
+ps -eo pid,etime,args | grep -i '[s]impleproxy'
+sudo ss -tlnp | grep -E ':(80|443|9090) '
 ```
+
+A leftover `simpleproxy -L 0.0.0.0:80 -R 127.0.0.1:<port>` will still be holding
+`:80` days later, proxying to a VS Code forward that no longer exists. Kill it:
+
+```bash
+sudo kill <pid>
+ss -tln | grep ':80 ' || echo "80 free"
+```
+
+> **The symptom is deeply misleading.** Docker starts Traefik's process even when
+> port publishing fails, so you get:
+> - `docker compose ps` → `Up`, but the **PORTS column is empty**
+> - `docker inspect` → `"Networks": {}`
+> - `docker logs` → **completely empty**
+> - yet `docker exec traefik wget -qO- http://localhost:8080/api/overview` shows
+>   routers loaded and working
+>
+> An empty PORTS column on a container that declares `ports:` is a **failure
+> signal, not cosmetic**. Confirm the real error by forcing a recreate:
+> `docker compose -f local/docker-compose.yml up -d --force-recreate`, which
+> reports `failed to bind host port 0.0.0.0:80/tcp: address already in use`.
 
 **2. There is a config discrepancy to clean up as you go.**
 `docker-compose.devcontainer.yml:81-83` sets `REACT_APP_GRAPHQL_URI`,
@@ -101,8 +128,12 @@ services:
       - "443:443"
       - "9090:8080"
     volumes:
+      # docker provider: watch the Docker API for containers and their
+      # traefik.* labels. Read-only — Traefik only needs to observe.
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./central-router/config:/traefik/config/
+      # file provider: the TLS store and certificates (step 3).
+      # HOST_PROJECT_PATH is required — see the warning below.
+      - ${HOST_PROJECT_PATH:-..}/local/central-router/config:/traefik/config/
     networks:
       - pjx-network
     extra_hosts:
@@ -113,6 +144,45 @@ networks:
     external: true
     name: pjx-network
 ```
+
+### The two volume mounts, and why the second needs `HOST_PROJECT_PATH`
+
+Each mount serves one provider:
+
+| Mount | Provider | Purpose |
+|---|---|---|
+| `/var/run/docker.sock` | `--providers.docker` | Watch container events and read `traefik.*` labels → routing |
+| `local/central-router/config` | `--providers.file` | `tls.yml` and the mkcert certificates → TLS |
+
+So routing comes from labels (step 2) and TLS comes from files (step 3).
+
+> ⚠️ **The config mount must emit a host path.** Under
+> docker-outside-of-docker the **host daemon** resolves bind-mount sources. A
+> plain `./central-router/config` expands to
+> `/workspaces/pjx-root/local/central-router/config` when compose runs inside the
+> devcontainer — a path that does not exist on the host, so Docker silently
+> creates an empty directory and mounts that. Traefik then starts with no TLS
+> config and no certificates, and the failure presents as a certificate error
+> rather than a path error.
+>
+> This is the same problem as
+> [Phase 1 Step 6a](phase-1-script-layer.md#step-6a--emit-host-paths-for-bind-mounts),
+> and it is exactly why `CDE:local/docker-compose.yml` writes
+> `${HOST_PROJECT_PATH}/local/central-router/config`.
+>
+> The fallback is `..` rather than `.` here, because this compose file lives in
+> `local/` while `HOST_PROJECT_PATH` points at the repo root.
+>
+> Verify after starting Traefik:
+> ```bash
+> docker inspect pjx-router-traefik-1 --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}'
+> #   → the config source must be an absolute HOST path, not /workspaces/...
+> ```
+
+> **Socket access is privileged.** Read access to the Docker socket is enough to
+> enumerate and inspect every container on the host. Acceptable for local
+> development; a production Traefik would sit behind a socket proxy that exposes
+> only the endpoints it needs. Out of scope here, worth knowing.
 
 Two providers are enabled deliberately, and this is where we diverge from the
 reference architecture:
@@ -130,9 +200,12 @@ both providers is the same capability with half the moving parts. See the
 The `constraint-label` matters: without it Traefik would try to route the
 `workspace` devcontainer service too.
 
-> `pjx-network` is declared `external` here, so it must already exist. It is
-> created by `docker-compose.devcontainer.yml`. Start the app stack before the
-> router, or run `docker network create pjx-network` once.
+> `pjx-network` is declared `external` here, so it must already exist —
+> `docker-compose.devcontainer.yml` owns it. **Always start the app stack first**
+> (`dev-up.sh -d`), then the router. Do **not** create the network by hand: a
+> hand-created network lacks compose's labels, after which compose refuses to
+> adopt it and the devcontainer ends up detached. See the warning under
+> "Verify step 2" below.
 
 ---
 
@@ -212,21 +285,62 @@ production build.
 
 ### Verify step 2 before continuing
 
-```bash
-docker network create pjx-network 2>/dev/null || true
-dev-up.sh -d
-docker compose -f local/docker-compose.yml up -d
+**Start the stacks inside the devcontainer** — `dev-up.sh` is on `$PATH` there,
+and both compose files need `HOST_PROJECT_PATH` for their bind mounts:
 
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: pjx.localhost'      http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ql.pjx.localhost'   http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: api.pjx.localhost'  http://localhost/swagger
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: node.pjx.localhost' http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: sso.pjx.localhost'  http://localhost/
+```bash
+dev-up.sh -d                                       # owns pjx-network; must be first
+docker compose -f local/docker-compose.yml up -d   # joins it as external
+docker compose -f local/docker-compose.yml ps      # traefik should be Up
 ```
 
-All five should return 2xx or 3xx. If any returns 404, the router did not pick up
-that label — check `http://localhost:9090/dashboard/` and fix before proceeding.
-Do not stack TLS on top of broken routing.
+> ⚠️ **Never run `docker network create pjx-network`.**
+> `docker-compose.devcontainer.yml` declares the network as **compose-managed**
+> (`driver: bridge`), so compose creates it with `com.docker.compose.*` labels and
+> attaches the devcontainer to it. A hand-created network has no labels, and
+> compose then refuses to adopt it:
+>
+> ```
+> network pjx-network was found but has incorrect label
+> com.docker.compose.network set to "" (expected: "pjx-network")
+> ```
+>
+> It also leaves the devcontainer detached from the network, which silently breaks
+> `status.sh` (its health URLs resolve service names over `pjx-network`).
+>
+> Recovery: `docker network rm pjx-network`, then **Rebuild and Reopen in
+> Container** so VS Code's compose recreates and reattaches it properly.
+>
+> Ownership summary — the app stack creates it, Traefik joins it:
+>
+> | File | Declaration | Role |
+> |---|---|---|
+> | `docker-compose.devcontainer.yml` | `driver: bridge` | owns and labels it |
+> | `local/docker-compose.yml` | `external: true` | joins it |
+
+**Run the routing checks on the HOST.** Traefik publishes 80/443 on the host;
+inside the devcontainer `localhost:80` is its own empty loopback and every check
+would return `000`, looking like broken routing:
+
+```bash
+for h in pjx ql.pjx node.pjx sso.pjx; do
+  printf '%-16s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.localhost" http://localhost/)"
+done
+printf '%-16s %s\n' "api.pjx" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: api.pjx.localhost' http://localhost/swagger)"
+```
+
+All five should return 2xx or 3xx. If any returns 404, Traefik did not pick up
+that service's labels — check the dashboard at
+<http://localhost:9090/dashboard/> (host browser) and fix before proceeding. Do
+not stack TLS on top of broken routing.
+
+> **To test from inside the devcontainer instead**, target Traefik by service name
+> rather than localhost — it is on `pjx-network`:
+> ```bash
+> curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: pjx.localhost' http://traefik/
+> ```
+> Useful, but the host version is the more meaningful check: it is the exact path
+> your browser takes.
 
 ---
 
