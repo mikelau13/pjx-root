@@ -66,13 +66,13 @@ Phase 1 onward if not fixed first, which is why Phase 0 exists.
 
 ```mermaid
 graph TD
-    Browser["Browser<br/>*.pjx.localhost"] -->|":80 / :443"| T["Traefik<br/>compose project: pjx-router<br/>docker provider + file provider for TLS"]
-    T --> W["pjx-web-react<br/>pjx.localhost"]
-    T --> Q["pjx-graphql-apollo<br/>ql.pjx.localhost"]
-    T --> A["pjx-api-dotnet<br/>api.pjx.localhost"]
-    T --> N["pjx-api-node<br/>node.pjx.localhost"]
-    T --> S["pjx-sso-identityserver<br/>sso.pjx.localhost"]
-    T --> G["Grafana LGTM<br/>grafana.pjx.localhost"]
+    Browser["Browser<br/>*.pjx.test"] -->|":80 / :443"| T["Traefik<br/>compose project: pjx-router<br/>docker provider + file provider for TLS"]
+    T --> W["pjx-web-react<br/>pjx.test"]
+    T --> Q["pjx-graphql-apollo<br/>ql.pjx.test"]
+    T --> A["pjx-api-dotnet<br/>api.pjx.test"]
+    T --> N["pjx-api-node<br/>node.pjx.test"]
+    T --> S["pjx-sso-identityserver<br/>sso.pjx.test"]
+    T --> G["Grafana LGTM<br/>grafana.pjx.test"]
     W -.->|OTLP| G
     Q -.->|OTLP| G
     A -.->|OTLP| G
@@ -194,7 +194,7 @@ covers the same need. Revisit only if you miss it.
 |---|---|---|---|---|
 | [0](phase-0-foundation.md) | Fix the devcontainer bugs; get a container that actually provisions | Low | Yes | — |
 | [1](phase-1-script-layer.md) | `local/scripts/` on `$PATH`; lifecycle hooks | Low | Yes | 0 |
-| [2](phase-2-traefik.md) | Traefik, mkcert TLS, `*.pjx.localhost` hostnames | **Medium** | Yes | 1 |
+| [2](phase-2-traefik.md) | Traefik, mkcert TLS, `*.pjx.test` hostnames | **Medium** | Yes | 1 |
 | [3](phase-3-observability.md) | Grafana LGTM stack running and routed | Low | Yes | 2 |
 | [4](phase-4-dotnet8.md) | .NET 3.1 → 8 for the seven API-side projects; drop IS4 from the API | Medium | Branch only | D1 |
 | [5](phase-5-otel.md) | OpenTelemetry instrumentation (all but SSO) | Medium | Yes | 3, 4 |

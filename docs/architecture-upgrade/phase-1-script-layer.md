@@ -303,7 +303,7 @@ for entry in "${SERVICE_HEALTH[@]}"; do
 done
 ```
 
-> Phase 2 replaces the `localhost:PORT` URLs here with `*.pjx.localhost`
+> Phase 2 replaces the `localhost:PORT` URLs here with `*.pjx.test`
 > hostnames, and Phase 3 adds a Grafana row. Expect to edit this file twice more.
 
 ---

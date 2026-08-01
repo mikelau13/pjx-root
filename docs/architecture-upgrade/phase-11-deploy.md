@@ -282,7 +282,7 @@ Most likely first failures, in rough order of probability:
    role assignment. `describe pod` shows the mount failing.
 2. **OIDC redirect mismatch** — the issuer is now
    `https://demo.…/auth`, and `Config.cs` still has Phase 2's
-   `https://pjx.localhost/...`. Login breaks; nothing else does.
+   `https://pjx.test/...`. Login breaks; nothing else does.
 3. **Postgres connectivity** — firewall rule or `SslMode=Require` missing.
 4. **Probe timing** — .NET cold start exceeding `initialDelaySeconds` on a
    contended node, causing a restart loop that looks like a crash.

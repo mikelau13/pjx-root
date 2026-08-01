@@ -1,6 +1,6 @@
 # How a request reaches a pjx container
 
-A walkthrough of everything between typing `https://pjx.localhost` and a response
+A walkthrough of everything between typing `https://pjx.test` and a response
 coming back from the React container — name resolution, TLS, Traefik routing, and
 the container network.
 
@@ -99,8 +99,27 @@ accidentally does the right thing. Inside a container, loopback is that
 container's own network namespace — empty.
 
 This is why `pjx-api-dotnet` could not reach `https://sso.pjx.localhost` to fetch
-the OIDC discovery document, and why the dev hostnames need a TLD without special
-handling, such as the RFC 6761 **`.test`** namespace.
+the OIDC discovery document — a failure that presents as broken authentication,
+not broken DNS.
+
+### The resolution: pjx uses `.test`
+
+`.test` is reserved by the same RFC for testing and carries **no special resolver
+behaviour**, so `/etc/hosts` and `extra_hosts` work normally and the name resolves
+identically from the host, the devcontainer, and every app container.
+
+The trade is one line in the host's `/etc/hosts`:
+
+```
+127.0.0.1 pjx.test ql.pjx.test api.pjx.test node.pjx.test sso.pjx.test grafana.pjx.test
+```
+
+and `extra_hosts: ["<name>:host-gateway"]` on any container that must reach
+Traefik by hostname — currently `workspace` and `pjx-api-dotnet`.
+
+Everything from here on uses `.test`. The `.localhost` material above is kept
+because the trap is easy to fall back into: it looks like it should work, and it
+does work from the browser.
 
 ---
 
@@ -116,19 +135,19 @@ sequenceDiagram
     participant T as Traefik
     participant C as pjx-web-react<br/>:3000
 
-    B->>B: Resolve pjx.localhost → ::1
-    B->>K: TCP connect [::1]:443
-    K->>T: Docker port publish<br/>[::]:443 → container :443
+    B->>B: Resolve pjx.test → 127.0.0.1<br/>(host /etc/hosts)
+    B->>K: TCP connect 127.0.0.1:443
+    K->>T: Docker port publish<br/>0.0.0.0:443 → container :443
 
     Note over B,T: TLS handshake — before any HTTP exists
-    B->>T: ClientHello, SNI = "pjx.localhost"
+    B->>T: ClientHello, SNI = "pjx.test"
     T->>T: Search tls.yml certificates<br/>for a SAN matching the SNI
-    T-->>B: Serve *.pjx.localhost cert + chain
+    T-->>B: Serve *.pjx.test cert + chain
     B->>B: Verify against mkcert CA<br/>(imported into the browser)
 
     Note over B,T: Now HTTP, inside the TLS tunnel
-    B->>T: GET / , Host: pjx.localhost
-    T->>T: entrypoint "https" → match router rule<br/>Host(`pjx.localhost`) → router pjx-web
+    B->>T: GET / , Host: pjx.test
+    T->>T: entrypoint "https" → match router rule<br/>Host(`pjx.test`) → router pjx-web
     T->>T: Resolve service pjx-web → port 3000
     T->>C: GET / over pjx-network
     C-->>T: 200
@@ -193,9 +212,9 @@ Each service has an HTTPS router and an HTTP router that exists only to redirect
 
 ```mermaid
 flowchart TD
-    H80["Request on :80<br/>http entrypoint"] --> RH["router pjx-web-http<br/>rule: Host(`pjx.localhost`)"]
+    H80["Request on :80<br/>http entrypoint"] --> RH["router pjx-web-http<br/>rule: Host(`pjx.test`)"]
     RH --> MW["middleware to-https@file<br/>redirectScheme, 302"]
-    MW --> RESP["302 Location:<br/>https://pjx.localhost/"]
+    MW --> RESP["302 Location:<br/>https://pjx.test/"]
     RESP -.->|"browser follows"| H443
     H443["Request on :443<br/>https entrypoint"] --> RS["router pjx-web<br/>rule + tls=true"]
     RS --> SVC["service pjx-web → :3000"]
@@ -250,7 +269,7 @@ labels/rule problem, not an application problem. Compare against an app-generate
 
 | From | To reach a service, use |
 |---|---|
-| Host browser / host shell | `https://pjx.localhost` (published ports) |
+| Host browser / host shell | `https://pjx.test` (published ports) |
 | Devcontainer shell, via Traefik | the hostname — needs a resolvable TLD, `extra_hosts` → `host-gateway` |
 | Devcontainer shell, direct to a service | `http://pjx-web-react:3000` (service name + **container** port) |
 | App container → app container | `http://pjx-api-node:8081` (service name + container port) |

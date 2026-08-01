@@ -152,12 +152,12 @@ you want visibility into on a gateway.
 
 ```bash
 dev-up.sh -d && obs-up.sh
-curl -s https://node.pjx.localhost/ > /dev/null
-curl -s https://ql.pjx.localhost/graphql > /dev/null
+curl -s https://node.pjx.test/ > /dev/null
+curl -s https://ql.pjx.test/graphql > /dev/null
 
 # Traces arrived — query Tempo through Grafana
 curl -s -u admin:admin \
-  'https://grafana.pjx.localhost/api/datasources/proxy/uid/tempo/api/search?tags=service.name%3Dpjx-api-node' \
+  'https://grafana.pjx.test/api/datasources/proxy/uid/tempo/api/search?tags=service.name%3Dpjx-api-node' \
   | head -c 400
 ```
 
@@ -227,7 +227,7 @@ OTLP endpoint and adds meaningful bundle weight for a demo app.
 
 If you do it: `@opentelemetry/sdk-trace-web` plus
 `@opentelemetry/instrumentation-fetch`, exporting to
-`https://otlp.pjx.localhost` — which needs a new Traefik route to the collector's
+`https://otlp.pjx.test` — which needs a new Traefik route to the collector's
 4318 port with permissive CORS headers.
 
 **Recommendation: skip unless you specifically want frontend traces.** Server-side
@@ -257,15 +257,15 @@ provisioned on a fresh start.
 ```bash
 # 1. All instrumented services registered with Tempo
 curl -s -u admin:admin \
-  'https://grafana.pjx.localhost/api/datasources/proxy/uid/tempo/api/search/tag/service.name/values'
+  'https://grafana.pjx.test/api/datasources/proxy/uid/tempo/api/search/tag/service.name/values'
 
 # 2. Prometheus is scraping metrics
 curl -s -u admin:admin \
-  'https://grafana.pjx.localhost/api/datasources/proxy/uid/prometheus/api/v1/label/job/values'
+  'https://grafana.pjx.test/api/datasources/proxy/uid/prometheus/api/v1/label/job/values'
 
 # 3. Logs arriving in Loki
 curl -s -u admin:admin \
-  'https://grafana.pjx.localhost/api/datasources/proxy/uid/loki/loki/api/v1/label/service_name/values'
+  'https://grafana.pjx.test/api/datasources/proxy/uid/loki/loki/api/v1/label/service_name/values'
 
 # 4. Naming is consistent — the same service names in all three datasources,
 #    with no prefixes. This is the check that keeps us out of
