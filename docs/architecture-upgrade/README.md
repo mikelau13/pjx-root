@@ -26,6 +26,12 @@ environment.
 
 You execute the steps. This document is the instruction set, not a changelog.
 
+## Background reading
+
+- [**How a request reaches a pjx container**](../reference/request-flow.md) —
+  name resolution (including the `.localhost` trap), TLS/SNI, Traefik routing,
+  and the container network, with diagrams. Worth reading before Phase 2.
+
 ## Reference environment
 
 `/home/mike/projects/CloudDevEnvironment` is the architecture we're copying

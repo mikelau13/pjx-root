@@ -529,19 +529,45 @@ git show --stat HEAD | grep -E 'key|\.pem' || echo "no key material committed"
 
 ## Step 4 — Teach the devcontainer the hostnames
 
-In `.devcontainer/devcontainer.json`, add `runArgs` (the pattern is from
-`CDE:.devcontainer/devcontainer.json:8-21`):
+> ⚠️ **Do not use `runArgs`.** `CDE:.devcontainer/devcontainer.json:8-21` uses
+> `runArgs` with `--add-host`, but that property is only valid for devcontainers
+> based on `image` or `build`/`dockerFile`. CloudDevEnvironment uses
+> `"dockerFile"`; pjx uses `"dockerComposeFile"`, and VS Code rejects it with
+> **"Property runArgs is not allowed"**. For compose-based devcontainers the
+> equivalent is `extra_hosts:` on the service.
+>
+> The **address also differs**. CloudDevEnvironment maps these names to
+> `127.0.0.1` because it runs docker-in-docker — its containers publish inside
+> the devcontainer, so loopback is right there. Under docker-outside-of-docker,
+> Traefik publishes on the **host**, and `127.0.0.1` inside the devcontainer is
+> its own loopback where nothing listens. Use `host-gateway`.
 
-```jsonc
-"runArgs": [
-  "--add-host=pjx.localhost:127.0.0.1",
-  "--add-host=ql.pjx.localhost:127.0.0.1",
-  "--add-host=api.pjx.localhost:127.0.0.1",
-  "--add-host=node.pjx.localhost:127.0.0.1",
-  "--add-host=sso.pjx.localhost:127.0.0.1",
-  "--add-host=grafana.pjx.localhost:127.0.0.1"
-],
+Add to the `workspace` service in `docker-compose.devcontainer.yml`:
+
+```yaml
+  workspace:
+    # Resolve the Traefik hostnames from inside the devcontainer. host-gateway
+    # (not 127.0.0.1) because Traefik publishes on the HOST under
+    # docker-outside-of-docker.
+    extra_hosts:
+      - "pjx.localhost:host-gateway"
+      - "ql.pjx.localhost:host-gateway"
+      - "api.pjx.localhost:host-gateway"
+      - "node.pjx.localhost:host-gateway"
+      - "sso.pjx.localhost:host-gateway"
+      - "grafana.pjx.localhost:host-gateway"
 ```
+
+Verify after rebuilding, from inside the container:
+
+```bash
+getent hosts pjx.localhost                                   # → a gateway IP (172.x.x.x)
+curl -s -o /dev/null -w '%{http_code}\n' https://pjx.localhost/    # → 200
+```
+
+The second check matters beyond convenience: [Step 5](#step-5--move-the-oidc-configuration)
+has the .NET API validating tokens against `https://sso.pjx.localhost` from
+inside a container, which needs exactly this resolution path.
 
 Replace the whole `forwardPorts` / `portsAttributes` block. Only the router's
 ports need forwarding now:

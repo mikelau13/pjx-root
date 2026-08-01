@@ -22,3 +22,15 @@ projects/*/.vs/
 # Environment files
 projects/*/.env
 projects/*/.env.local
+
+# Local TLS material (Phase 2). mkcert generates a per-machine CA, so none of
+# this is shareable: without rootCA-key.pem nobody else can sign with this CA,
+# and without the leaf key Traefik cannot serve it. Everyone runs mkcert
+# locally — see docs/architecture-upgrade/phase-2-traefik.md step 3.
+local/central-router/config/ca/
+local/central-router/config/cert/
+
+# C# extension workspace-scan cache. Regenerated automatically; contains
+# container-absolute paths and a workspace hash. Anchored with a leading slash
+# so it cannot match projects/pjx-api-dotnet/.
+/dotnet/

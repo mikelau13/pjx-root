@@ -5,6 +5,16 @@ services:
     build:
       context: .devcontainer
       dockerfile: Dockerfile
+    # Resolve the Traefik hostnames from inside the devcontainer. host-gateway
+    # (not 127.0.0.1) because Traefik publishes on the HOST under
+    # docker-outside-of-docker; 127.0.0.1 here is the devcontainer's own loopback.
+    extra_hosts:
+      - "pjx.localhost:host-gateway"
+      - "ql.pjx.localhost:host-gateway"
+      - "api.pjx.localhost:host-gateway"
+      - "node.pjx.localhost:host-gateway"
+      - "sso.pjx.localhost:host-gateway"
+      - "grafana.pjx.localhost:host-gateway"
     volumes:
       - .:/workspaces/pjx-root:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
