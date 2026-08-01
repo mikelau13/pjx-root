@@ -23,6 +23,7 @@ npm install -g nodemon ts-node typescript
 
 git config --global init.defaultBranch main
 git config --global core.autocrlf input
+git config --global --add safe.directory "${REPO_ROOT}"
 
 # Node projects
 for proj in pjx-web-react pjx-api-node pjx-graphql-apollo; do

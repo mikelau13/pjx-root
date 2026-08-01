@@ -2,8 +2,8 @@ tls:
   stores:
     default:
       defaultCertificate:
-        certFile: /traefik/config/cert/_wildcard.pjx.localhost+3.pem
-        keyFile: /traefik/config/cert/_wildcard.pjx.localhost+3-key.pem
+        certFile: /traefik/config/cert/_wildcard.pjx.test+3.pem
+        keyFile: /traefik/config/cert/_wildcard.pjx.test+3-key.pem
   certificates:
-    - certFile: /traefik/config/cert/_wildcard.pjx.localhost+3.pem
-      keyFile: /traefik/config/cert/_wildcard.pjx.localhost+3-key.pem
+    - certFile: /traefik/config/cert/_wildcard.pjx.test+3.pem
+      keyFile: /traefik/config/cert/_wildcard.pjx.test+3-key.pem

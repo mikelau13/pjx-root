@@ -9,12 +9,12 @@ services:
     # (not 127.0.0.1) because Traefik publishes on the HOST under
     # docker-outside-of-docker; 127.0.0.1 here is the devcontainer's own loopback.
     extra_hosts:
-      - "pjx.localhost:host-gateway"
-      - "ql.pjx.localhost:host-gateway"
-      - "api.pjx.localhost:host-gateway"
-      - "node.pjx.localhost:host-gateway"
-      - "sso.pjx.localhost:host-gateway"
-      - "grafana.pjx.localhost:host-gateway"
+      - "pjx.test:host-gateway"
+      - "ql.pjx.test:host-gateway"
+      - "api.pjx.test:host-gateway"
+      - "node.pjx.test:host-gateway"
+      - "sso.pjx.test:host-gateway"
+      - "grafana.pjx.test:host-gateway"
     volumes:
       - .:/workspaces/pjx-root:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
@@ -26,11 +26,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-ql.rule=Host(`ql.pjx.localhost`)"
+      - "traefik.http.routers.pjx-ql.rule=Host(`ql.pjx.test`)"
       - "traefik.http.services.pjx-ql.loadbalancer.server.port=4000"
       - "traefik.http.routers.pjx-ql.entrypoints=https"
       - "traefik.http.routers.pjx-ql.tls=true"
-      - "traefik.http.routers.pjx-ql-http.rule=Host(`ql.pjx.localhost`)"
+      - "traefik.http.routers.pjx-ql-http.rule=Host(`ql.pjx.test`)"
       - "traefik.http.routers.pjx-ql-http.entrypoints=http"
       - "traefik.http.routers.pjx-ql-http.middlewares=to-https@file"
     build:
@@ -53,11 +53,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-api.rule=Host(`api.pjx.localhost`)"
+      - "traefik.http.routers.pjx-api.rule=Host(`api.pjx.test`)"
       - "traefik.http.services.pjx-api.loadbalancer.server.port=80"
       - "traefik.http.routers.pjx-api.entrypoints=https"
       - "traefik.http.routers.pjx-api.tls=true"
-      - "traefik.http.routers.pjx-api-http.rule=Host(`api.pjx.localhost`)"
+      - "traefik.http.routers.pjx-api-http.rule=Host(`api.pjx.test`)"
       - "traefik.http.routers.pjx-api-http.entrypoints=http"
       - "traefik.http.routers.pjx-api-http.middlewares=to-https@file"
     build:
@@ -76,16 +76,18 @@ services:
       - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
     working_dir: /app/src/Pjx_Api
     command: ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:80"]
+    extra_hosts:
+        - "sso.pjx.test:host-gateway"
 
   pjx-api-node:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-node.rule=Host(`node.pjx.localhost`)"
+      - "traefik.http.routers.pjx-node.rule=Host(`node.pjx.test`)"
       - "traefik.http.services.pjx-node.loadbalancer.server.port=8081"
       - "traefik.http.routers.pjx-node.entrypoints=https"
       - "traefik.http.routers.pjx-node.tls=true"
-      - "traefik.http.routers.pjx-node-http.rule=Host(`node.pjx.localhost`)"
+      - "traefik.http.routers.pjx-node-http.rule=Host(`node.pjx.test`)"
       - "traefik.http.routers.pjx-node-http.entrypoints=http"
       - "traefik.http.routers.pjx-node-http.middlewares=to-https@file"
     build:
@@ -108,11 +110,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-web.rule=Host(`pjx.localhost`)"
+      - "traefik.http.routers.pjx-web.rule=Host(`pjx.test`)"
       - "traefik.http.services.pjx-web.loadbalancer.server.port=3000"
       - "traefik.http.routers.pjx-web.entrypoints=https"
       - "traefik.http.routers.pjx-web.tls=true"
-      - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.localhost`)"
+      - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.test`)"
       - "traefik.http.routers.pjx-web-http.entrypoints=http"
       - "traefik.http.routers.pjx-web-http.middlewares=to-https@file"
     build:
@@ -129,7 +131,7 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - WDS_SOCKET_HOST=pjx.localhost
+      - WDS_SOCKET_HOST=pjx.test
       - WDS_SOCKET_PORT=443
     stdin_open: true
     tty: true
@@ -139,11 +141,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-sso.rule=Host(`sso.pjx.localhost`)"
+      - "traefik.http.routers.pjx-sso.rule=Host(`sso.pjx.test`)"
       - "traefik.http.services.pjx-sso.loadbalancer.server.port=80"
       - "traefik.http.routers.pjx-sso.entrypoints=https"
       - "traefik.http.routers.pjx-sso.tls=true"
-      - "traefik.http.routers.pjx-sso-http.rule=Host(`sso.pjx.localhost`)"
+      - "traefik.http.routers.pjx-sso-http.rule=Host(`sso.pjx.test`)"
       - "traefik.http.routers.pjx-sso-http.entrypoints=http"
       - "traefik.http.routers.pjx-sso-http.middlewares=to-https@file"
     build:
