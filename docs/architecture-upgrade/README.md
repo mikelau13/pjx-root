@@ -222,6 +222,41 @@ roughly $60–70/month running, ~$25 with the cluster stopped between demos.
 | `pjx-api-dotnet` (7 projects) | `net8.0` | stock JWT bearer, IS4 removed | Full |
 | `pjx-sso-identityserver` | `netcoreapp3.1` | IdentityServer4 4.1.2 | None until Phase 8 |
 
+## Where to run commands
+
+pjx uses **docker-outside-of-docker**: the devcontainer holds only the Docker
+CLI, and every container is a sibling on the host daemon. That makes "which shell
+am I in?" a load-bearing question — most of the defects found while executing
+Phases 0–2 came from getting it wrong.
+
+| Run in the **devcontainer** | Run on the **host** |
+|---|---|
+| `dev-up.sh`, `stop.sh`, `status.sh`, `validate.sh`, `obs-up.sh` | anything hitting a **published port**: `localhost:9090`, `localhost:4318` |
+| `docker compose …` (needs `HOST_PROJECT_PATH`) | your **browser** |
+| `dotnet`, `npm`, `mkcert`, `git` once `safe.directory` is set | `sudo` for `/etc/hosts`, killing host processes, system trust store |
+| service-to-service HTTP: `http://pjx-web-react:3000` | `az`, `kubectl`, `helm` against Azure |
+
+Three rules behind that table:
+
+1. **Bind-mount sources are resolved by the host daemon.** Compose files must emit
+   host paths — `${HOST_PROJECT_PATH:-.}` — even when run from inside the
+   container. A relative path silently mounts an empty auto-created directory.
+2. **`localhost` means something different in every shell.** Inside a container it
+   is that container's own loopback. Reach other services by compose service name
+   and **container** port (`http://pjx-api-dotnet:80`), not the published port.
+3. **Trust stores are per-machine.** `mkcert -install` in the devcontainer does
+   not make your host browser, or any app container, trust the CA. Each needs its
+   own import.
+
+The prompt tells you where you are: `vscode ➜ …` is the devcontainer,
+`mike@…` is the host.
+
+> ⚠️ **Never run a recursive delete on a path that exists in both namespaces.**
+> `/workspaces` is Docker's junk on the host and *your repo's bind mount* inside
+> the container. `sudo rm -rf /workspaces` in the devcontainer destroyed the
+> working tree once during Phase 1. `ls` the path first, and prefer `chown` over
+> `rm` when fixing ownership.
+
 ## Working conventions
 
 - **One branch per phase**, off `master`, merged via PR before the next phase

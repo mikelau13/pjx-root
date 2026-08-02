@@ -254,6 +254,10 @@ provisioned on a fresh start.
 
 ## Verify
 
+> Run these in the devcontainer unless a command is marked HOST. See
+> [Where to run commands](README.md#where-to-run-commands) — `localhost` means
+> something different in each shell.
+
 ```bash
 # 1. All instrumented services registered with Tempo
 curl -s -u admin:admin \

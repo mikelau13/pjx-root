@@ -186,6 +186,10 @@ visible alongside everything else.
 
 ## Verify
 
+> Run these in the devcontainer unless a command is marked HOST. See
+> [Where to run commands](README.md#where-to-run-commands) — `localhost` means
+> something different in each shell.
+
 ```bash
 # 1. No IdentityServer4 anywhere
 grep -rn 'IdentityServer4' --include=*.csproj --include=*.cs projects/ || echo "clean"
