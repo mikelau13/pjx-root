@@ -66,6 +66,10 @@ services:
     container_name: pjx-api-dotnet-dev
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-api-dotnet:/app:cached
+      # The API fetches the OIDC discovery document from https://sso.pjx.test,
+      # served with the local mkcert certificate. Debian trusts certs dropped
+      # here once update-ca-certificates runs — see command below.
+      - ${HOST_PROJECT_PATH:-.}/local/central-router/config/ca/rootCA.pem:/usr/local/share/ca-certificates/pjx-mkcert-ca.crt:ro
     ports:
       - "6001:80"
     networks:
@@ -73,9 +77,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
-      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
+      - PJX_SSO__AUTHORITY=https://sso.pjx.test
     working_dir: /app/src/Pjx_Api
-    command: ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:80"]
+    command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
     extra_hosts:
         - "sso.pjx.test:host-gateway"
 

@@ -699,6 +699,74 @@ only if you actually hit the problem; on Linux without WSL you usually will not.
 by exact string match, and IdentityServer4 validates that the token issuer
 matches the authority the client asked for. Three files must agree.
 
+### 5o — Prerequisites, both easy to miss
+
+Do these **before** touching redirect URIs. Each one fails in a way that looks
+like an OIDC bug.
+
+**(i) The API must trust the mkcert CA.** It fetches the discovery document over
+HTTPS, and its container has its own trust store. Without this,
+`curl https://sso.pjx.test/.well-known/openid-configuration` from inside
+`pjx-api-dotnet` returns `000` with
+`SSL certificate problem: unable to get local issuer certificate`.
+
+```yaml
+  pjx-api-dotnet:
+    volumes:
+      - ${HOST_PROJECT_PATH:-.}/local/central-router/config/ca/rootCA.pem:/usr/local/share/ca-certificates/pjx-mkcert-ca.crt:ro
+    command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
+```
+
+Mounting alone is not enough — Debian needs `update-ca-certificates` to rebuild
+the bundle, hence the wrapped command.
+
+**(ii) IdentityServer must honour `X-Forwarded-Proto`.** Traefik terminates TLS
+and forwards over plain HTTP on port 80. ASP.NET Core ignores the forwarded
+scheme unless the ForwardedHeaders middleware is enabled, so IdentityServer
+advertises **`http://`** endpoints:
+
+```
+"issuer":"http://sso.pjx.test"
+"authorization_endpoint":"http://sso.pjx.test/connect/authorize"
+```
+
+With that, tokens carry `iss: http://sso.pjx.test` while the API expects
+`https://…`, so **every token is rejected** and `oidc-client`'s issuer check
+fails. No amount of care with redirect URIs fixes it.
+
+In `projects/pjx-sso-identityserver/Startup.cs`, in `Configure()`, **before**
+`UseIdentityServer()`:
+
+```csharp
+using Microsoft.AspNetCore.HttpOverrides;   // at the top of the file
+
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+// Defaults trust loopback only; Traefik is a sibling container with a private
+// IP on pjx-network. Safe to clear — the container is only reachable via Traefik.
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+```
+
+> `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` looks like an easier route but does
+> **not** work here: it leaves `KnownProxies`/`KnownNetworks` at loopback-only, so
+> Traefik's headers are discarded. The code version is required.
+
+Add the same block to `pjx-api-dotnet`'s `Startup.cs` so any absolute URLs it
+generates carry the right scheme.
+
+**Gate before continuing:**
+
+```bash
+docker exec pjx-api-dotnet-dev sh -c 'curl -s https://sso.pjx.test/.well-known/openid-configuration' | grep -o '"issuer":"[^"]*"'
+#   → "issuer":"https://sso.pjx.test"      ← https, not http
+```
+
+---
+
 **5a. `projects/pjx-sso-identityserver/Config.cs`** — the `pjx-web-react` client
 at lines 90-98:
 

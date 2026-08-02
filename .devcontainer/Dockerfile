@@ -14,10 +14,3 @@ RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
     && curl -fsSL "https://github.com/FiloSottile/mkcert/releases/download/${MKCERT_VERSION}/mkcert-${MKCERT_VERSION}-linux-amd64" \
         -o /usr/local/bin/mkcert \
     && chmod +x /usr/local/bin/mkcert
-
-# Trust the repo's mkcert CA. Runtime `mkcert -install` is lost on every
-# rebuild; this copies the committed CA into the system trust store at build
-# time. The CA cert is public — only its private key is gitignored.
-COPY --chown=root:root local/central-router/config/ca/rootCA.pem \
-    /usr/local/share/ca-certificates/pjx-mkcert-ca.crt
-RUN update-ca-certificates

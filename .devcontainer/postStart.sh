@@ -21,4 +21,14 @@ if [ -f "$CA" ] && ! grep -q "$(openssl x509 -in "$CA" -noout -subject)"
     echo "Installed pjx mkcert CA into the trust store"
 fi
 
+# Trust the repo's mkcert CA (Phase 2). Runtime `mkcert -install` is lost on
+# every rebuild, and the CA cannot go in the image: the build context is
+# .devcontainer/ and the CA is gitignored (per-machine).
+CA=/workspaces/pjx-root/local/central-router/config/ca/rootCA.pem
+if [ -f "$CA" ] && [ ! -f /usr/local/share/ca-certificates/pjx-mkcert-ca.crt ]; then
+    sudo cp "$CA" /usr/local/share/ca-certificates/pjx-mkcert-ca.crt
+    sudo update-ca-certificates >/dev/null 2>&1
+    echo "Installed pjx mkcert CA into the trust store"
+fi
+
 echo "Post-start setup completed"
