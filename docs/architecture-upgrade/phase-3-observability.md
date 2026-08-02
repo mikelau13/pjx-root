@@ -73,7 +73,12 @@ services:
       - "traefik.http.services.pjx-grafana.loadbalancer.server.port=3000"
       - "traefik.http.routers.pjx-grafana-http.rule=Host(`grafana.pjx.test`)"
       - "traefik.http.routers.pjx-grafana-http.entrypoints=http"
-      - "traefik.http.routers.pjx-grafana-http.middlewares=to-https"
+      # @file is required — the middleware is defined in the file provider
+      # (local/central-router/config/middlewares.yml), not by a container label.
+      # Without the suffix the router loads with
+      # "error": ["middleware \"to-https@docker\" does not exist"] and
+      # "status": "disabled", and plain HTTP returns 404 instead of redirecting.
+      - "traefik.http.routers.pjx-grafana-http.middlewares=to-https@file"
 
 volumes:
   grafana-data:
@@ -133,14 +138,19 @@ pre-provisioned, so there is nothing to configure there.
 
 ---
 
-## Step 3 — Add the hostname and the start script
+## Step 3 — The start script
 
-Add to `runArgs` in `.devcontainer/devcontainer.json` — if you already included
-`grafana.pjx.test` in Phase 2 step 4, it is done:
-
-```jsonc
-"--add-host=grafana.pjx.test:127.0.0.1",
-```
+> **Hostname resolution needs nothing here.** Phase 2 step 4 already added
+> `grafana.pjx.test` to `extra_hosts` on the `workspace` service, and the
+> `*.pjx.test` wildcard certificate already covers it.
+>
+> Do **not** use `runArgs` — it is only valid for devcontainers based on `image`
+> or `build`/`dockerFile`. pjx uses `dockerComposeFile`, so VS Code rejects it
+> with **"Property runArgs is not allowed"**. Compose-based devcontainers use
+> `extra_hosts:` on the service, and the target must be `host-gateway` rather
+> than `127.0.0.1` — Traefik publishes on the host, so loopback inside the
+> container points nowhere. See
+> [Phase 2 step 4](phase-2-traefik.md#step-4--teach-the-devcontainer-the-hostnames).
 
 Create `local/scripts/obs-up.sh`:
 
@@ -151,7 +161,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "${REPO_ROOT}"
-docker network create pjx-network 2>/dev/null || true
+
+# pjx-network is owned by docker-compose.devcontainer.yml, which creates it with
+# compose's labels. NEVER `docker network create` it by hand: an unlabelled
+# network makes compose refuse to adopt it ("incorrect label
+# com.docker.compose.network set to ''") and leaves the devcontainer detached,
+# silently breaking status.sh. Start the app stack first instead.
+if ! docker network inspect pjx-network >/dev/null 2>&1; then
+    echo "ERROR: pjx-network does not exist. Run dev-up.sh first." >&2
+    exit 1
+fi
+
 docker compose -f observability/docker-compose.yml up -d
 echo "Grafana starting → https://grafana.pjx.test (first boot takes ~30s)"
 ```
@@ -160,10 +180,16 @@ echo "Grafana starting → https://grafana.pjx.test (first boot takes ~30s)"
 chmod +x local/scripts/obs-up.sh
 ```
 
-Optionally add a Grafana row to `local/scripts/status.sh`:
+Optionally add a Grafana row to the `SERVICE_HEALTH` array in
+**`local/scripts/lib/common.sh`** — not `status.sh` itself. Phase 1 moved the
+service inventory into the shared library, so `status.sh` just iterates it. Add
+it as the last entry, before the closing `)`:
 
 ```bash
-    "Grafana|pjx-grafana-otel|https://grafana.pjx.test"
+    # Service name + container port, consistent with the other rows — status.sh
+    # runs inside the devcontainer on pjx-network. Using the Traefik hostname
+    # would work too but adds a dependency on the router and CA trust.
+    "Grafana|pjx-grafana-otel|http://grafana-otel:3000/api/health"
 ```
 
 ---
@@ -203,6 +229,10 @@ OTEL_EXPORTER_OTLP_ENDPOINT=
 
 ## Verify
 
+> Run these in the devcontainer unless a command is marked HOST. See
+> [Where to run commands](README.md#where-to-run-commands) — `localhost` means
+> something different in each shell.
+
 ```bash
 obs-up.sh
 sleep 30
@@ -214,6 +244,7 @@ docker ps --filter name=pjx-grafana-otel --format '{{.Names}}\t{{.Status}}'
 curl -s -o /dev/null -w '%{http_code}\n' https://grafana.pjx.test/login   # → 200
 
 # 3. Traefik registered the route
+# HOST — Traefik's dashboard is a published port
 curl -s http://localhost:9090/api/http/routers | grep -o 'pjx-grafana[^"]*'
 
 # 4. All three datasources provisioned
@@ -223,7 +254,7 @@ curl -s -u admin:admin https://grafana.pjx.test/api/datasources \
 
 # 5. OTLP receivers accepting connections
 curl -s -o /dev/null -w 'OTLP HTTP: %{http_code}\n' -X POST \
-  -H 'Content-Type: application/json' -d '{}' http://localhost:4318/v1/traces
+  -H 'Content-Type: application/json' -d '{}' http://localhost:4318/v1/traces   # HOST
 # → 200 or 400 (both prove the receiver is listening; connection refused does not)
 
 # 6. The PJX dashboard folder exists

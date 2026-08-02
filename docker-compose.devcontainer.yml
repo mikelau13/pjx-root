@@ -1,4 +1,6 @@
-version: '3.8'
+# Set to http://grafana-otel:4318 to export telemetry. Empty disables the
+# exporter, so the stack runs normally with the observability stack stopped.
+x-otel-endpoint: &otel-endpoint "OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
 
 services:
   workspace:
@@ -43,6 +45,7 @@ services:
     networks:
       - pjx-network
     environment:
+      - *otel-endpoint
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     command: npm run dev
@@ -71,6 +74,7 @@ services:
     networks:
       - pjx-network
     environment:
+      - *otel-endpoint
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - PJX_SSO__AUTHORITY=https://sso.pjx.test
@@ -100,6 +104,7 @@ services:
     networks:
       - pjx-network
     environment:
+      - *otel-endpoint
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     command: npm start
@@ -125,6 +130,7 @@ services:
     networks:
       - pjx-network
     environment:
+      - *otel-endpoint
       - CHOKIDAR_USEPOLLING=true
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
       - WDS_SOCKET_HOST=pjx.test
@@ -153,6 +159,7 @@ services:
     networks:
       - pjx-network
     environment:
+      - *otel-endpoint
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:443;http://+:80
       - ASPNETCORE_Kestrel__Certificates__Default__Password=password

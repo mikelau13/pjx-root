@@ -291,6 +291,10 @@ Most likely first failures, in rough order of probability:
 
 ## Verify
 
+> Run these in the devcontainer (it carries `az`, `kubectl` and `helm` from
+> Phase 6). Browser checks and anything on a published port are HOST-side. See
+> [Where to run commands](README.md#where-to-run-commands).
+
 ```bash
 # 1. Everything running
 kubectl -n pjx get pods,svc,ingress

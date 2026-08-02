@@ -239,8 +239,9 @@ production image (`projects/pjx-web-react/Dockerfile`) builds with
 URLs are frozen into the JavaScript bundle, and no Kubernetes env var or
 ConfigMap can change them.
 
-Left unaddressed, the deployed app loads and then tries to reach
-`http://localhost:6001`.
+Left unaddressed, the deployed app loads and then tries to reach whatever was
+baked in at build time — `https://api.pjx.test` after Phase 2 — which does not
+resolve from a user's browser pointed at your AKS demo.
 
 **The fix:** serve configuration as a separate file that nginx delivers and the
 bundle reads at startup.
@@ -438,6 +439,10 @@ to move, and both can run at once.
 ---
 
 ## Verify
+
+> Run these in the devcontainer (it carries `az`, `kubectl` and `helm` from
+> Phase 6). Browser checks and anything on a published port are HOST-side. See
+> [Where to run commands](README.md#where-to-run-commands).
 
 ```bash
 # 1. No secrets in the repo

@@ -363,11 +363,22 @@ updates:
     open-pull-requests-limit: 0
 ```
 
-> `pjx-api-dotnet`'s `Dockerfile` expects a different build context than the
-> project root — `docker-compose.yml:20` uses
-> `./projects/pjx-api-dotnet/src/Pjx_Api/` while
-> `docker-compose.devcontainer.yml:34` uses `./projects/pjx-api-dotnet`. Confirm
-> which is correct and set `context:` accordingly, or the matrix entry fails.
+> **`pjx-api-dotnet` has two Dockerfiles with different build contexts.**
+> `projects/pjx-api-dotnet/Dockerfile.dev` builds from the project root (what
+> `docker-compose.devcontainer.yml` uses), while
+> `projects/pjx-api-dotnet/src/Pjx_Api/Dockerfile` builds from that subdirectory.
+> The matrix above assumes `context: ./projects/<service>`, so it picks the
+> project-root one — verify that is the image you want to ship, and set
+> `dockerfile:` explicitly rather than relying on the default:
+>
+> ```yaml
+>         with:
+>           context: ./projects/${{ matrix.service }}
+>           file: ./projects/${{ matrix.service }}/Dockerfile
+> ```
+>
+> (The now-deleted root `docker-compose.yml` used the `src/Pjx_Api/` context,
+> which is why the two ever diverged.)
 
 ---
 
@@ -452,6 +463,10 @@ helm upgrade --install pjx-release helm-pjx/ -f helm-pjx/environments/dev.yaml
 ---
 
 ## Verify
+
+> Run these in the devcontainer unless a command is marked HOST. See
+> [Where to run commands](README.md#where-to-run-commands) — `localhost` means
+> something different in each shell.
 
 ```bash
 # 1. Chart lints and renders

@@ -614,7 +614,7 @@ The third check is the one that silently breaks Step 5 if skipped.
 
 > ### Three things a devcontainer rebuild destroys
 >
-> `runArgs`/`extra_hosts` changes require a rebuild, and a rebuild discards
+> `extra_hosts` changes require a rebuild, and a rebuild discards
 > everything installed or configured **inside** the container at runtime. Expect
 > these to vanish, repeatedly, until they are made durable:
 >
@@ -675,7 +675,7 @@ ports need forwarding now:
 },
 ```
 
-Then **Rebuild Container** — `runArgs` only take effect on creation.
+Then **Rebuild and Reopen in Container** — `extra_hosts` only takes effect when the container is created.
 
 ### Host-side: trust the CA
 
@@ -926,4 +926,4 @@ CAROOT="$(pwd)/local/central-router/config/ca" mkcert -uninstall
 ```
 
 Also remove the imported CA from your browser, and rebuild the container to drop
-the `runArgs`.
+the `extra_hosts` entries.

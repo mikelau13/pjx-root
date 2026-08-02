@@ -173,34 +173,48 @@ needs a browser.
 
 ---
 
-## Step 2 — Rewire `devcontainer.json`
+## Step 2 — Keep the compose-based devcontainer
 
-Replace the `dockerComposeFile` / `service` keys with `build`, and drop the
-features now baked into the image:
+> ### 🛑 An earlier draft of this step was wrong — do not restructure
+>
+> It said to replace `dockerComposeFile`/`service` with `build`, delete the
+> `workspace` compose service, and add the `docker-in-docker` feature. **That
+> would undo most of Phases 0–3.** Specifically it would:
+>
+> | Lose | Consequence |
+> |---|---|
+> | `extra_hosts` on `workspace` | `pjx.test` and friends stop resolving in the devcontainer |
+> | `containerEnv: HOST_PROJECT_PATH` | every compose bind mount silently mounts an empty directory again |
+> | `pjx-network` membership | `status.sh`'s service-name health URLs all go red |
+> | docker-**outside**-of-docker | reintroduces the nested `dockerd` that hijacks `/var/run/docker.sock` — Phase 0 defect #8, which took three attempts to diagnose |
+>
+> The reasoning was "CloudDevEnvironment does it that way", but CDE uses
+> docker-in-docker deliberately: it runs three isolated submodule stacks that
+> each want ports 80/443. pjx needs the browser to reach its containers, which is
+> exactly why Phase 0 chose docker-outside-of-docker.
+
+**Keep `dockerComposeFile` and `service: workspace` exactly as they are.** The
+only change here is dropping the two features whose tools the Dockerfile now
+provides:
 
 ```jsonc
-{
-  "name": "PJX Root - Multi-service Development",
-  "build": { "dockerfile": "Dockerfile" },
-  "workspaceFolder": "/workspaces/pjx-root",
-  "features": {
+"features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-  },
-  // ... runArgs, forwardPorts, portsAttributes, customizations from Phase 2
-}
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+    // removed: node (now nvm in the Dockerfile), dotnet (now the 8.0 SDK)
+},
 ```
 
-Removed: the `node` and `dotnet` features (now in the Dockerfile).
-Kept: `docker-in-docker` (needed to run the app stack), `git`, `github-cli`.
+Leave untouched: `runServices`, `containerEnv`, `workspaceFolder`,
+`remoteUser: vscode`, `forwardPorts`, `otherPortsAttributes`, and everything in
+`docker-compose.devcontainer.yml`.
 
-> Moving from `dockerComposeFile` to `build` means the devcontainer no longer
-> participates in the app compose stack. That is intentional and matches
-> CloudDevEnvironment, which uses `"dockerFile"` and starts stacks separately via
-> scripts. The `workspace` service in `docker-compose.devcontainer.yml` becomes
-> dead — delete it, along with the `DOCKER_HOST` override, since
-> docker-in-docker handles the socket now.
+> **Reconsider whether this phase is worth it at all.** Its remaining value is
+> the Kubernetes/Helm toolchain plus `azure-cli` — genuinely needed for Phase 9.
+> Hand-rolling the Node and .NET installs only buys version pinning, and the
+> features already work. A reasonable smaller Phase 6 is: add the k8s tools and
+> `azure-cli` to the existing Dockerfile, and keep the `node`/`dotnet` features.
 
 Add the k8s VS Code extension if it is not already listed:
 
@@ -268,6 +282,10 @@ with a remote cluster.
 ---
 
 ## Verify
+
+> Run these in the devcontainer unless a command is marked HOST. See
+> [Where to run commands](README.md#where-to-run-commands) — `localhost` means
+> something different in each shell.
 
 ```bash
 # Rebuild the container first: Ctrl+Shift+P → Dev Containers: Rebuild Container

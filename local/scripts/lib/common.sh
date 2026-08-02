@@ -34,6 +34,10 @@ SERVICE_HEALTH=(
     ".NET API|pjx-api-dotnet-dev|http://pjx-api-dotnet:80/swagger"
     "Node API|pjx-api-node-dev|http://pjx-api-node:8081"
     "SSO|pjx-sso-identityserver-dev|http://pjx-sso-identityserver:80"
+    # Service name + container port, consistent with the other rows — status.sh
+    # runs inside the devcontainer on pjx-network. Using the Traefik hostname
+    # would work too but adds a dependency on the router and CA trust.
+    "Grafana|pjx-grafana-otel|http://grafana-otel:3000/api/health"
 )
 
 # validate.sh needs to know how each project builds.

@@ -432,6 +432,10 @@ Staging issues an untrusted cert, which is enough to prove the plumbing works.
 
 ## Verify
 
+> Run these in the devcontainer (it carries `az`, `kubectl` and `helm` from
+> Phase 6). Browser checks and anything on a published port are HOST-side. See
+> [Where to run commands](README.md#where-to-run-commands).
+
 ```bash
 source local/scripts/azure/00-vars.sh
 
