@@ -128,6 +128,66 @@ builds (step 5).
 
 ---
 
+## Step 1b — Stop the .NET containers first
+
+**Do this before any `dotnet build`.** Both .NET containers run `dotnet watch` as
+**root** and write into the same `obj/` and `bin/` trees you are about to build
+locally. Changing the TFM creates fresh `obj/Debug/net8.0/` directories, and
+whichever process gets there first owns them — usually the container, since
+`dotnet watch` reacts to your edit within milliseconds.
+
+The failure looks like a permissions bug in your own project:
+
+```
+error MSB3191: Unable to create directory "obj/Debug/net8.0/staticwebassets/".
+Access to the path ... is denied.
+```
+
+```bash
+docker stop pjx-api-dotnet-dev pjx-sso-identityserver-dev
+```
+
+```bash
+# HOST — clean up anything the containers already claimed
+sudo chown -R "$(id -un):$(id -gn)" <repo>/projects
+```
+
+Leave them stopped for the whole phase; `dotnet watch` cannot run cleanly against
+half-migrated projects anyway. Start them again at Step 4 when the images are
+rebuilt on the 8.0 base.
+
+While they are stopped:
+
+- `status.sh` shows two red rows — expected, not a regression.
+- **Login does not work.** The SSO server is down, so `https://pjx.test` loads but
+  cannot authenticate. React, Apollo and the Node API are unaffected.
+- **Do not run `dev-up.sh -d`** — it starts all five and restarts the two you
+  stopped, putting you back in the ownership race. Name the others instead:
+  ```bash
+  docker compose -f docker-compose.devcontainer.yml up -d \
+    pjx-web-react pjx-graphql-apollo pjx-api-node
+  ```
+
+At Step 4 the base images change to 8.0, so bring them back with a rebuild rather
+than a plain start: `dev-up.sh -b -d`.
+
+> **If you would rather keep them running**, make them write as your uid instead.
+> On both .NET services:
+>
+> ```yaml
+>     user: "1000:1000"
+>     environment:
+>       # dotnet needs a writable HOME as non-root; /root is not writable.
+>       - DOTNET_CLI_HOME=/tmp
+>       - HOME=/tmp
+> ```
+>
+> uid 1000 is your host user and the devcontainer's `vscode`, so output is owned
+> consistently. Worth doing permanently — it is the same root-owned-artifacts
+> problem as Phase 0 defect #8, just triggered by a different writer.
+
+---
+
 ## Step 2 — Upgrade bottom-up
 
 Follow the real dependency order so a failure has one cause:

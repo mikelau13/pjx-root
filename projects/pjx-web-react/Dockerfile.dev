@@ -3,7 +3,9 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+# .npmrc carries legacy-peer-deps=true, required for the Apollo Client 2 /
+# graphql 15 peer conflict. Without it the RUN below fails with ERESOLVE.
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm install

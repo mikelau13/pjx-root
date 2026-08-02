@@ -1,6 +1,7 @@
 ﻿using Autofac;
 using Autofac.Extras.Moq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using Pjx.CalendarEntity.Models;
 using Pjx.CalendarLibrary.Repositories;
 using System;
@@ -19,7 +20,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>());
                 var checker = mock.Create<ConflictCheck>();
 
@@ -35,7 +36,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddYears(-1), End = eventToCheck.End.Value.AddYears(-1) }
@@ -54,7 +55,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddYears(1), End = eventToCheck.End.Value.AddYears(1) }
@@ -74,7 +75,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start, End = eventToCheck.End }
@@ -94,7 +95,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddMinutes(-60), End = eventToCheck.End.Value.AddMinutes(-60) }
@@ -117,7 +118,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddMinutes(60), End = eventToCheck.End.Value.AddMinutes(60) }
@@ -141,7 +142,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.End.Value, End = eventToCheck.End.Value.AddHours(1) }
@@ -165,7 +166,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.End.Value }
@@ -188,7 +189,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddMinutes(-60), End = eventToCheck.End.Value.AddMinutes(+60) }
@@ -207,7 +208,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddMinutes(+60), End = eventToCheck.End.Value.AddMinutes(-60) }
@@ -227,7 +228,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddYears(1) },
@@ -249,7 +250,7 @@ namespace Pjx.CalendarLibrary.ConflictChecks.Tests
             {
                 var eventToCheck = new CalendarEvent { Start = new DateTimeOffset(2020, 1, 1, 0, 0, 0, new TimeSpan()), End = new DateTimeOffset(2020, 1, 2, 0, 0, 0, new TimeSpan()) };
                 mock.Mock<ICalendarEventRepository<CalendarEvent>>()
-                    .Setup(x => x.GetAll())
+                    .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>()))
                     .Returns(new List<CalendarEvent>
                     {
                         new CalendarEvent { EventId = 1, Start = eventToCheck.Start.AddYears(1), End = eventToCheck.End.Value.AddYears(1) },
