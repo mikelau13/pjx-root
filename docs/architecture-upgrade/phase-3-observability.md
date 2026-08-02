@@ -180,7 +180,10 @@ echo "Grafana starting → https://grafana.pjx.test (first boot takes ~30s)"
 chmod +x local/scripts/obs-up.sh
 ```
 
-Optionally add a Grafana row to `local/scripts/status.sh`:
+Optionally add a Grafana row to the `SERVICE_HEALTH` array in
+**`local/scripts/lib/common.sh`** — not `status.sh` itself. Phase 1 moved the
+service inventory into the shared library, so `status.sh` just iterates it. Add
+it as the last entry, before the closing `)`:
 
 ```bash
     # Service name + container port, consistent with the other rows — status.sh

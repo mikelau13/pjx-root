@@ -1,0 +1,49 @@
+name: pjx-otel
+
+services:
+  grafana-otel:
+      # Pinned deliberately. This image bundles Grafana + Loki + Tempo + Mimir, so
+      # a tag bump moves four products at once and can break the dashboard
+      # provisioning paths mounted below. Dependabot proposes upgrades (Phase 7).
+      image: grafana/otel-lgtm:0.18.1
+      hostname: pjx-grafana-otel
+      container_name: pjx-grafana-otel
+      ports:
+        # OTLP receivers, published so host-side tooling can also emit.
+        # Grafana's own UI (3000) is NOT published — it is reached via Traefik.
+        - "4317:4317"   # OTLP gRPC
+        - "4318:4318"   # OTLP HTTP
+      environment:
+        - GF_SECURITY_ADMIN_USER=admin
+        - GF_SECURITY_ADMIN_PASSWORD=admin
+        - GF_SECURITY_ALLOW_EMBEDDING=true
+      volumes:
+        # HOST_PROJECT_PATH for the same reason as Phase 1 Step 6a and Phase 2
+        # Step 1: the host daemon resolves bind-mount sources, so a relative path
+        # would resolve to a non-existent /workspaces/... path and Docker would
+        # mount an empty directory — Grafana would start with no dashboards.
+        # Fallback is `..` because this compose file lives in observability/.
+        - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards/provider.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
+        - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards:/otel-lgtm/custom-dashboards
+        - grafana-data:/var/lib/grafana
+      networks:
+        - pjx-network
+      labels:
+        - "traefik.enable=true"
+        - "traefik.constraint-label=pjx-public"
+        - "traefik.http.routers.pjx-grafana.rule=Host(`grafana.pjx.test`)"
+        - "traefik.http.routers.pjx-grafana.entrypoints=https"
+        - "traefik.http.routers.pjx-grafana.tls=true"
+        # Grafana's port 3000 is intentionally not published — it would collide with the React dev server, and everything goes through Traefik now anyway.
+        - "traefik.http.services.pjx-grafana.loadbalancer.server.port=3000"
+        - "traefik.http.routers.pjx-grafana-http.rule=Host(`grafana.pjx.test`)"
+        - "traefik.http.routers.pjx-grafana-http.entrypoints=http"
+        - "traefik.http.routers.pjx-grafana-http.middlewares=to-https"
+
+volumes:
+  grafana-data: 
+
+networks:
+  pjx-network:
+    external: true
+    name: pjx-network
