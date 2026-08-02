@@ -520,6 +520,37 @@ Recorded here so it is not lost:
 - **[Phase 8](phase-8-duende.md) — SSO to Duende IdentityServer.** Not "not in
   this plan", but explicitly outside the mandatory path. Gate: before any
   production deployment
+- **`Pjx.Calendar_Test` mocks a method the code no longer calls.** All 12 tests in
+  `OverlappingCheckTests` fail with `NullReferenceException` at
+  `OverlappingCheck.cs:15` (`events.Count`).
+
+  ```csharp
+  // ConflictCheck.cs:28 — what the code calls
+  _repository.GetAllBetweenByUser(ce.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
+
+  // OverlappingCheckTests.cs:22 — what the test stubs
+  .Setup(x => x.GetAll())
+  ```
+
+  The stub never matches, so Moq returns `null` for the unstubbed method and
+  `events.Count` throws. **Pre-existing, not a .NET 8 regression** — the same
+  mismatch fails identically on `netcoreapp3.1`; these tests had evidently not
+  been run in years. Fix is a one-line change per test:
+
+  ```csharp
+  .Setup(x => x.GetAllBetweenByUser(It.IsAny<string>(),
+                                    It.IsAny<DateTimeOffset>(),
+                                    It.IsAny<DateTimeOffset>()))
+  ```
+
+  Ruled out during Phase 4: the test SDK (bumped to 17.11 / MSTest 3.6, which
+  *was* required for net8.0 discovery) and the mocking libraries (Autofac 8.4 /
+  Extras.Moq 7.0). Neither changed the outcome.
+
+- **`Pjx_Api_Test` contains no tests at all** — no `[TestClass]` or
+  `[TestMethod]`. "No test is available" is accurate, not a discovery failure.
+  Either write tests for the API or delete the project.
+
 - **`authService.getUser()` calls `signinRedirectCallback()` on any page.**
   Found during Phase 2 verification: `/country/all` throws
   `Unhandled Rejection (Error): No state in response`.

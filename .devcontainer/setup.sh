@@ -65,4 +65,10 @@ if ! grep -qF "${PROFILE_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
     echo "Added local/scripts to PATH in ~/.bashrc"
 fi
 
+TOOLS_LINE='export PATH="$PATH:$HOME/.dotnet/tools"'
+if ! grep -qF "${TOOLS_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
+    echo "${TOOLS_LINE}" >> "${HOME}/.bashrc"
+    echo "Added ~/.dotnet/tools to PATH in ~/.bashrc"
+fi
+
 echo "Setup complete."

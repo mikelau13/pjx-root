@@ -1,7 +1,9 @@
 #Stage 1
 FROM node:14.5.0-slim as builder
 WORKDIR /app
-COPY package*.json .
+# .npmrc carries legacy-peer-deps=true, required for the Apollo Client 2 /
+# graphql 15 peer conflict. Without it this RUN fails with ERESOLVE.
+COPY package*.json .npmrc ./
 RUN npm install
 COPY . .
 RUN npm run build

@@ -14,3 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
     && curl -fsSL "https://github.com/FiloSottile/mkcert/releases/download/${MKCERT_VERSION}/mkcert-${MKCERT_VERSION}-linux-amd64" \
         -o /usr/local/bin/mkcert \
     && chmod +x /usr/local/bin/mkcert
+
+# EF Core CLI. Installed in the image so it
+# survives devcontainer rebuilds.
+USER vscode
+RUN dotnet tool install --global dotnet-ef --version 8.0.11
+ENV PATH="${PATH}:/home/vscode/.dotnet/tools"
+USER root

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(set +e)",
+      "Bash(git -C /home/mike/projects/pjx-root status --short)",
+      "Bash(git -C /home/mike/projects/pjx-root log --oneline -3)",
+      "Bash(git -C /home/mike/projects/pjx-root branch -a)",
+      "Bash(set -e)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git reset *)",
+      "Bash(sudo -n ss -tlnp)",
+      "Bash(docker compose *)",
+      "Bash(docker top *)",
+      "Bash(docker exec *)",
+      "Bash(sudo ss -tlnp)",
+      "Bash(HOST_PROJECT_PATH=/home/mike/projects/pjx-root docker compose -f local/docker-compose.yml up -d --force-recreate)",
+      "Bash(getent hosts *)",
+      "Read(//usr/local/share/ca-certificates/**)",
+      "Bash(command -v mkcert)",
+      "Bash(grep -c '^```mermaid' docs/reference/request-flow.md)",
+      "Bash(read -r l)",
+      "Bash([ -f \"docs/reference/$l\" ])"
+    ]
+  }
+}
