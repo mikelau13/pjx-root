@@ -40,8 +40,6 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-graphql-apollo:/app:cached
       - /app/node_modules
-    ports:
-      - "4000:4000"
     networks:
       - pjx-network
     environment:
@@ -70,8 +68,6 @@ services:
       # served with the local mkcert certificate. Debian trusts certs dropped
       # here once update-ca-certificates runs — see command below.
       - ${HOST_PROJECT_PATH:-.}/local/central-router/config/ca/rootCA.pem:/usr/local/share/ca-certificates/pjx-mkcert-ca.crt:ro
-    ports:
-      - "6001:80"
     networks:
       - pjx-network
     environment:
@@ -101,8 +97,6 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-api-node:/app:cached
       - /app/node_modules
-    ports:
-      - "8081:8081"
     networks:
       - pjx-network
     environment:
@@ -128,8 +122,6 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-web-react:/app:cached
       - /app/node_modules
-    ports:
-      - "3000:3000"
     networks:
       - pjx-network
     environment:
@@ -158,9 +150,6 @@ services:
     container_name: pjx-sso-identityserver-dev
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-sso-identityserver:/app:cached
-    ports:
-      - "5001:80"
-      - "5002:443"
     networks:
       - pjx-network
     environment:
