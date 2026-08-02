@@ -5,6 +5,16 @@ services:
     build:
       context: .devcontainer
       dockerfile: Dockerfile
+    # Resolve the Traefik hostnames from inside the devcontainer. host-gateway
+    # (not 127.0.0.1) because Traefik publishes on the HOST under
+    # docker-outside-of-docker; 127.0.0.1 here is the devcontainer's own loopback.
+    extra_hosts:
+      - "pjx.test:host-gateway"
+      - "ql.pjx.test:host-gateway"
+      - "api.pjx.test:host-gateway"
+      - "node.pjx.test:host-gateway"
+      - "sso.pjx.test:host-gateway"
+      - "grafana.pjx.test:host-gateway"
     volumes:
       - .:/workspaces/pjx-root:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
@@ -13,6 +23,16 @@ services:
       - pjx-network
 
   pjx-graphql-apollo:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=pjx-public"
+      - "traefik.http.routers.pjx-ql.rule=Host(`ql.pjx.test`)"
+      - "traefik.http.services.pjx-ql.loadbalancer.server.port=4000"
+      - "traefik.http.routers.pjx-ql.entrypoints=https"
+      - "traefik.http.routers.pjx-ql.tls=true"
+      - "traefik.http.routers.pjx-ql-http.rule=Host(`ql.pjx.test`)"
+      - "traefik.http.routers.pjx-ql-http.entrypoints=http"
+      - "traefik.http.routers.pjx-ql-http.middlewares=to-https@file"
     build:
       context: ./projects/pjx-graphql-apollo
       dockerfile: Dockerfile.dev
@@ -20,8 +40,6 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-graphql-apollo:/app:cached
       - /app/node_modules
-    ports:
-      - "4000:4000"
     networks:
       - pjx-network
     environment:
@@ -30,24 +48,48 @@ services:
     command: npm run dev
 
   pjx-api-dotnet:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=pjx-public"
+      - "traefik.http.routers.pjx-api.rule=Host(`api.pjx.test`)"
+      - "traefik.http.services.pjx-api.loadbalancer.server.port=80"
+      - "traefik.http.routers.pjx-api.entrypoints=https"
+      - "traefik.http.routers.pjx-api.tls=true"
+      - "traefik.http.routers.pjx-api-http.rule=Host(`api.pjx.test`)"
+      - "traefik.http.routers.pjx-api-http.entrypoints=http"
+      - "traefik.http.routers.pjx-api-http.middlewares=to-https@file"
     build:
       context: ./projects/pjx-api-dotnet
       dockerfile: Dockerfile.dev
     container_name: pjx-api-dotnet-dev
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-api-dotnet:/app:cached
-    ports:
-      - "6001:80"
+      # The API fetches the OIDC discovery document from https://sso.pjx.test,
+      # served with the local mkcert certificate. Debian trusts certs dropped
+      # here once update-ca-certificates runs — see command below.
+      - ${HOST_PROJECT_PATH:-.}/local/central-router/config/ca/rootCA.pem:/usr/local/share/ca-certificates/pjx-mkcert-ca.crt:ro
     networks:
       - pjx-network
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
-      - PJX_SSO__AUTHORITY=https://pjx-sso-identityserver
+      - PJX_SSO__AUTHORITY=https://sso.pjx.test
     working_dir: /app/src/Pjx_Api
-    command: ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:80"]
+    command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
+    extra_hosts:
+        - "sso.pjx.test:host-gateway"
 
   pjx-api-node:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=pjx-public"
+      - "traefik.http.routers.pjx-node.rule=Host(`node.pjx.test`)"
+      - "traefik.http.services.pjx-node.loadbalancer.server.port=8081"
+      - "traefik.http.routers.pjx-node.entrypoints=https"
+      - "traefik.http.routers.pjx-node.tls=true"
+      - "traefik.http.routers.pjx-node-http.rule=Host(`node.pjx.test`)"
+      - "traefik.http.routers.pjx-node-http.entrypoints=http"
+      - "traefik.http.routers.pjx-node-http.middlewares=to-https@file"
     build:
       context: ./projects/pjx-api-node
       dockerfile: Dockerfile.dev
@@ -55,8 +97,6 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-api-node:/app:cached
       - /app/node_modules
-    ports:
-      - "8081:8081"
     networks:
       - pjx-network
     environment:
@@ -65,6 +105,16 @@ services:
     command: npm start
 
   pjx-web-react:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=pjx-public"
+      - "traefik.http.routers.pjx-web.rule=Host(`pjx.test`)"
+      - "traefik.http.services.pjx-web.loadbalancer.server.port=3000"
+      - "traefik.http.routers.pjx-web.entrypoints=https"
+      - "traefik.http.routers.pjx-web.tls=true"
+      - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.test`)"
+      - "traefik.http.routers.pjx-web-http.entrypoints=http"
+      - "traefik.http.routers.pjx-web-http.middlewares=to-https@file"
     build:
       context: ./projects/pjx-web-react
       dockerfile: Dockerfile.dev
@@ -72,29 +122,34 @@ services:
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-web-react:/app:cached
       - /app/node_modules
-    ports:
-      - "3000:3000"
     networks:
       - pjx-network
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - REACT_APP_GRAPHQL_URI=http://localhost:4000/graphql
-      - REACT_APP_API_URI=http://localhost:6001
-      - REACT_APP_SSO_URI=https://localhost:5002
+      - DANGEROUSLY_DISABLE_HOST_CHECK=true
+      - WDS_SOCKET_HOST=pjx.test
+      - WDS_SOCKET_PORT=443
     stdin_open: true
     tty: true
     command: npm start
 
   pjx-sso-identityserver:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.constraint-label=pjx-public"
+      - "traefik.http.routers.pjx-sso.rule=Host(`sso.pjx.test`)"
+      - "traefik.http.services.pjx-sso.loadbalancer.server.port=80"
+      - "traefik.http.routers.pjx-sso.entrypoints=https"
+      - "traefik.http.routers.pjx-sso.tls=true"
+      - "traefik.http.routers.pjx-sso-http.rule=Host(`sso.pjx.test`)"
+      - "traefik.http.routers.pjx-sso-http.entrypoints=http"
+      - "traefik.http.routers.pjx-sso-http.middlewares=to-https@file"
     build:
       context: ./projects/pjx-sso-identityserver
       dockerfile: Dockerfile.dev
     container_name: pjx-sso-identityserver-dev
     volumes:
       - ${HOST_PROJECT_PATH:-.}/projects/pjx-sso-identityserver:/app:cached
-    ports:
-      - "5001:80"
-      - "5002:443"
     networks:
       - pjx-network
     environment:
@@ -108,3 +163,4 @@ services:
 networks:
   pjx-network:
     driver: bridge
+    name: pjx-network

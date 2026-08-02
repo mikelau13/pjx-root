@@ -1,6 +1,6 @@
 # Phase 3 — Grafana LGTM observability stack
 
-**Goal:** Grafana running at `https://grafana.pjx.localhost`, ready to receive
+**Goal:** Grafana running at `https://grafana.pjx.test`, ready to receive
 OTLP telemetry.
 
 **Risk:** Low — a self-contained container with no changes to app services.
@@ -54,19 +54,24 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:
-      - ./provisioning/dashboards/provider.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
-      - ./provisioning/dashboards:/otel-lgtm/custom-dashboards
+      # HOST_PROJECT_PATH for the same reason as Phase 1 Step 6a and Phase 2
+      # Step 1: the host daemon resolves bind-mount sources, so a relative path
+      # would resolve to a non-existent /workspaces/... path and Docker would
+      # mount an empty directory — Grafana would start with no dashboards.
+      # Fallback is `..` because this compose file lives in observability/.
+      - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards/provider.yml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
+      - ${HOST_PROJECT_PATH:-..}/observability/provisioning/dashboards:/otel-lgtm/custom-dashboards
       - grafana-data:/var/lib/grafana
     networks:
       - pjx-network
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-grafana.rule=Host(`grafana.pjx.localhost`)"
+      - "traefik.http.routers.pjx-grafana.rule=Host(`grafana.pjx.test`)"
       - "traefik.http.routers.pjx-grafana.entrypoints=https"
       - "traefik.http.routers.pjx-grafana.tls=true"
       - "traefik.http.services.pjx-grafana.loadbalancer.server.port=3000"
-      - "traefik.http.routers.pjx-grafana-http.rule=Host(`grafana.pjx.localhost`)"
+      - "traefik.http.routers.pjx-grafana-http.rule=Host(`grafana.pjx.test`)"
       - "traefik.http.routers.pjx-grafana-http.entrypoints=http"
       - "traefik.http.routers.pjx-grafana-http.middlewares=to-https"
 
@@ -131,10 +136,10 @@ pre-provisioned, so there is nothing to configure there.
 ## Step 3 — Add the hostname and the start script
 
 Add to `runArgs` in `.devcontainer/devcontainer.json` — if you already included
-`grafana.pjx.localhost` in Phase 2 step 4, it is done:
+`grafana.pjx.test` in Phase 2 step 4, it is done:
 
 ```jsonc
-"--add-host=grafana.pjx.localhost:127.0.0.1",
+"--add-host=grafana.pjx.test:127.0.0.1",
 ```
 
 Create `local/scripts/obs-up.sh`:
@@ -148,7 +153,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 docker network create pjx-network 2>/dev/null || true
 docker compose -f observability/docker-compose.yml up -d
-echo "Grafana starting → https://grafana.pjx.localhost (first boot takes ~30s)"
+echo "Grafana starting → https://grafana.pjx.test (first boot takes ~30s)"
 ```
 
 ```bash
@@ -158,7 +163,7 @@ chmod +x local/scripts/obs-up.sh
 Optionally add a Grafana row to `local/scripts/status.sh`:
 
 ```bash
-    "Grafana|pjx-grafana-otel|https://grafana.pjx.localhost"
+    "Grafana|pjx-grafana-otel|https://grafana.pjx.test"
 ```
 
 ---
@@ -206,13 +211,13 @@ sleep 30
 docker ps --filter name=pjx-grafana-otel --format '{{.Names}}\t{{.Status}}'
 
 # 2. Reachable through Traefik with a valid certificate
-curl -s -o /dev/null -w '%{http_code}\n' https://grafana.pjx.localhost/login   # → 200
+curl -s -o /dev/null -w '%{http_code}\n' https://grafana.pjx.test/login   # → 200
 
 # 3. Traefik registered the route
 curl -s http://localhost:9090/api/http/routers | grep -o 'pjx-grafana[^"]*'
 
 # 4. All three datasources provisioned
-curl -s -u admin:admin https://grafana.pjx.localhost/api/datasources \
+curl -s -u admin:admin https://grafana.pjx.test/api/datasources \
   | grep -o '"type":"[^"]*"' | sort -u
 # → prometheus, loki, tempo
 
@@ -222,10 +227,10 @@ curl -s -o /dev/null -w 'OTLP HTTP: %{http_code}\n' -X POST \
 # → 200 or 400 (both prove the receiver is listening; connection refused does not)
 
 # 6. The PJX dashboard folder exists
-curl -s -u admin:admin https://grafana.pjx.localhost/api/folders | grep -o '"title":"[^"]*"'
+curl -s -u admin:admin https://grafana.pjx.test/api/folders | grep -o '"title":"[^"]*"'
 ```
 
-In a browser: open `https://grafana.pjx.localhost`, log in with `admin`/`admin`,
+In a browser: open `https://grafana.pjx.test`, log in with `admin`/`admin`,
 and confirm Explore lists the three datasources. **Querying them returns
 nothing. That is correct for this phase.**
 

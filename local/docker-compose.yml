@@ -1,0 +1,38 @@
+name: pjx-router
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: pjx-traefik
+    command: >
+      --providers.docker=true
+      '--providers.docker.constraints=Label(`traefik.constraint-label`, `pjx-public`)'
+      --providers.file.directory=/traefik/config/
+      --providers.file.watch=true
+      --entrypoints.http.address=:80
+      --entrypoints.http.forwardedHeaders.insecure=true
+      --entrypoints.https.address=:443
+      --entrypoints.https.forwardedHeaders.insecure=true
+      --api.insecure=true
+      --accesslog
+      --log
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9090:8080"
+    volumes:
+      # docker provider: watch the Docker API for containers and their
+      # traefik.* labels. Read-only — Traefik only needs to observe.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # file provider: the TLS store and certificates (step 3).
+      # HOST_PROJECT_PATH is required — see the warning below.
+      - ${HOST_PROJECT_PATH:-..}/local/central-router/config:/traefik/config/
+    networks:
+      - pjx-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  pjx-network:
+    external: true
+    name: pjx-network

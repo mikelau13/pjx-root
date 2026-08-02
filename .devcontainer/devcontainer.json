@@ -35,6 +35,12 @@
 			}
 		}
 	},
+	"forwardPorts": [80, 443, 9090],
+	"portsAttributes": {
+		"80":  { "label": "Traefik (HTTP)",     "onAutoForward": "notify" },
+		"443": { "label": "Traefik (HTTPS)",    "onAutoForward": "notify" },
+		"9090":{ "label": "Traefik Dashboard",  "onAutoForward": "notify" }
+	},
 	// With docker-outside-of-docker, app containers publish directly on the
     // host, so VS Code forwarding is redundant — and it BINDS those host ports
     // on 127.0.0.1, which collides with the containers trying to publish them.

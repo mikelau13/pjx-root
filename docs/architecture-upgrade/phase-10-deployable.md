@@ -251,11 +251,11 @@ Add `projects/pjx-web-react/public/config.js` as the local default:
 // Runtime configuration. Overwritten in deployed environments by a ConfigMap
 // mounted at /usr/share/nginx/html/config.js — see helm-pjx/templates.
 window.__PJX_CONFIG__ = {
-  GRAPHQL_ENDPOINT:  "https://ql.pjx.localhost",
-  SSO_ISSUER_URL:    "https://sso.pjx.localhost",
+  GRAPHQL_ENDPOINT:  "https://ql.pjx.test",
+  SSO_ISSUER_URL:    "https://sso.pjx.test",
   SSO_CLIENT_ID:     "pjx-web-react",
-  API_DOTNET_URL:    "https://api.pjx.localhost",
-  PUBLIC_URL:        "https://pjx.localhost"
+  API_DOTNET_URL:    "https://api.pjx.test",
+  PUBLIC_URL:        "https://pjx.test"
 };
 ```
 
@@ -450,12 +450,12 @@ grep -rn -i 'sqlite' --include=*.csproj --include=*.json projects/ || echo "clea
 
 # 3. Health endpoints answer locally
 dev-up.sh -d
-curl -s -o /dev/null -w 'dotnet  %{http_code}\n' https://api.pjx.localhost/health/ready
-curl -s -o /dev/null -w 'node    %{http_code}\n' https://node.pjx.localhost/health
-curl -s -o /dev/null -w 'apollo  %{http_code}\n' https://ql.pjx.localhost/.well-known/apollo/server-health
+curl -s -o /dev/null -w 'dotnet  %{http_code}\n' https://api.pjx.test/health/ready
+curl -s -o /dev/null -w 'node    %{http_code}\n' https://node.pjx.test/health
+curl -s -o /dev/null -w 'apollo  %{http_code}\n' https://ql.pjx.test/.well-known/apollo/server-health
 
 # 4. Runtime config is served and consumed
-curl -s https://pjx.localhost/config.js       # → window.__PJX_CONFIG__ = {...}
+curl -s https://pjx.test/config.js       # → window.__PJX_CONFIG__ = {...}
 #    In the browser console: window.__PJX_CONFIG__ is populated
 
 # 5. Every deployment declares probes and resources

@@ -10,6 +10,7 @@ using IdentityServerAspNetIdentity.Services;
 using IdentityServerAspNetIdentity.Services.Email;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -131,9 +132,20 @@ namespace IdentityServerAspNetIdentity
             app.UseOpenApi();
             app.UseSwaggerUi3();
 
+            var forwardedHeaders = new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            };
+            // Defaults trust loopback only; Traefik is a sibling container with a private
+            // IP on pjx-network. Safe to clear — the container is only reachable via Traefik.
+            forwardedHeaders.KnownNetworks.Clear();
+            forwardedHeaders.KnownProxies.Clear();
+            app.UseForwardedHeaders(forwardedHeaders);
+
             app.UseStaticFiles();
             app.UseCors("CorsPolicy");
             app.UseRouting();
+            
             app.UseIdentityServer();
             app.UseAuthorization();
             app.UseEndpoints(endpoints =>

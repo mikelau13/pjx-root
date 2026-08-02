@@ -505,6 +505,29 @@ Recorded here so it is not lost:
 - **[Phase 8](phase-8-duende.md) — SSO to Duende IdentityServer.** Not "not in
   this plan", but explicitly outside the mandatory path. Gate: before any
   production deployment
+- **`authService.getUser()` calls `signinRedirectCallback()` on any page.**
+  Found during Phase 2 verification: `/country/all` throws
+  `Unhandled Rejection (Error): No state in response`.
+
+  ```js
+  // projects/pjx-web-react/src/services/authService.tsx:46-52
+  const user = await this.UserManager.getUser();
+  if (!user) {
+      return await this.UserManager.signinRedirectCallback();   // ← wrong here
+  }
+  ```
+
+  `signinRedirectCallback()` parses the *current URL* for an OIDC response, so it
+  is only valid on the callback route. On any other page there is no `state`
+  parameter and it throws. The correct behaviour for "no cached user" is
+  `signinRedirect()` (start a login) or a redirect to the login page.
+
+  **Pre-existing, not a Phase 2 regression** — the same call fails identically on
+  `localhost:3000`. Phase 2 verified the underlying auth path independently: a
+  `client_credentials` token carrying `iss: https://sso.pjx.test` is accepted by
+  the .NET API with a 200, so issuer matching and JWKS retrieval are sound. Only
+  the SPA's guard logic is wrong.
+
 - **Frontend dependency debt in `pjx-web-react`** — three related pieces, sensibly
   done together as one project:
   - **Apollo Client 2 → `@apollo/client` v3.** `apollo-boost`, `apollo-client`,

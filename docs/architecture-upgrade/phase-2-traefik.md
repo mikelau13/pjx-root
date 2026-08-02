@@ -1,7 +1,7 @@
 # Phase 2 — Traefik reverse proxy, TLS, and real hostnames
 
 **Goal:** replace `localhost:3000` / `localhost:4000` / `localhost:6001` with
-`pjx.localhost`, `ql.pjx.localhost`, `api.pjx.localhost` behind a single Traefik
+`pjx.test`, `ql.pjx.test`, `api.pjx.test` behind a single Traefik
 instance on ports 80/443, with a locally-trusted TLS certificate.
 
 **Risk: Medium — the highest of Phases 0–3.** The OIDC redirect URIs move, and
@@ -20,14 +20,41 @@ git checkout -b feature/arch-phase-2-traefik
 
 ## Before you start: two hard constraints
 
-**1. CloudDevEnvironment cannot be running.** Its `central-router` claims host
-ports 80, 443, and 9090 — exactly what pjx's Traefik will claim. Stop it first:
+**1. CloudDevEnvironment cannot be running** — and stopping its containers is not
+enough. Its `central-router` claims host ports 80, 443 and 9090, and its
+`proxy.sh` leaves a **`simpleproxy` process on the host** that outlives the
+containers entirely.
 
 ```bash
+# containers
 docker ps --filter name=central-router --format '{{.Names}}'
-# if anything is listed:
 (cd /home/mike/projects/CloudDevEnvironment && docker compose -f local/docker-compose.yml down)
+
+# host processes — this is the one that bites
+ps -eo pid,etime,args | grep -i '[s]impleproxy'
+sudo ss -tlnp | grep -E ':(80|443|9090) '
 ```
+
+A leftover `simpleproxy -L 0.0.0.0:80 -R 127.0.0.1:<port>` will still be holding
+`:80` days later, proxying to a VS Code forward that no longer exists. Kill it:
+
+```bash
+sudo kill <pid>
+ss -tln | grep ':80 ' || echo "80 free"
+```
+
+> **The symptom is deeply misleading.** Docker starts Traefik's process even when
+> port publishing fails, so you get:
+> - `docker compose ps` → `Up`, but the **PORTS column is empty**
+> - `docker inspect` → `"Networks": {}`
+> - `docker logs` → **completely empty**
+> - yet `docker exec traefik wget -qO- http://localhost:8080/api/overview` shows
+>   routers loaded and working
+>
+> An empty PORTS column on a container that declares `ports:` is a **failure
+> signal, not cosmetic**. Confirm the real error by forcing a recreate:
+> `docker compose -f local/docker-compose.yml up -d --force-recreate`, which
+> reports `failed to bind host port 0.0.0.0:80/tcp: address already in use`.
 
 **2. There is a config discrepancy to clean up as you go.**
 `docker-compose.devcontainer.yml:81-83` sets `REACT_APP_GRAPHQL_URI`,
@@ -57,17 +84,50 @@ forward.
 
 | Service | Hostname | Container port |
 |---|---|---|
-| pjx-web-react | `pjx.localhost` | 3000 |
-| pjx-graphql-apollo | `ql.pjx.localhost` | 4000 |
-| pjx-api-dotnet | `api.pjx.localhost` | 80 |
-| pjx-api-node | `node.pjx.localhost` | 8081 |
-| pjx-sso-identityserver | `sso.pjx.localhost` | 80 |
-| Grafana (Phase 3) | `grafana.pjx.localhost` | 3000 |
+| pjx-web-react | `pjx.test` | 3000 |
+| pjx-graphql-apollo | `ql.pjx.test` | 4000 |
+| pjx-api-dotnet | `api.pjx.test` | 80 |
+| pjx-api-node | `node.pjx.test` | 8081 |
+| pjx-sso-identityserver | `sso.pjx.test` | 80 |
+| Grafana (Phase 3) | `grafana.pjx.test` | 3000 |
 | Traefik dashboard | `localhost:9090` | 8080 |
 
-`.localhost` resolves to `127.0.0.1` automatically in Chrome and under
-systemd-resolved, so no `/etc/hosts` editing is needed on the host. The
-devcontainer needs explicit entries — step 4.
+### Why `.test` and not `.localhost`
+
+An earlier version of this plan used `*.pjx.localhost`, on the reasoning that
+`.localhost` resolves to loopback automatically and needs no `/etc/hosts` edit.
+**That does not work**, and the failure is invisible until Step 5.
+
+**glibc 2.35+ implements RFC 6761 for `.localhost`**: any name ending in
+`.localhost` is resolved internally to `127.0.0.1`/`::1` **without consulting
+`/etc/hosts` at all**. `extra_hosts`, Docker DNS, and manual host entries are all
+bypassed. Demonstrated in the devcontainer, with both names present in
+`/etc/hosts` pointing at `172.17.0.1`:
+
+```
+pjx.localhost  ->  ::1              ← /etc/hosts entry ignored
+pjx.test       ->  172.17.0.1       ← same file, honoured
+```
+
+From your host browser this is harmless — loopback *is* where Traefik listens.
+From inside a container it is fatal: loopback is that container's own empty
+namespace. `pjx-api-dotnet` resolved `sso.pjx.localhost` to its own `::1`, so it
+could never fetch the OIDC discovery document — and that surfaces as an
+authentication failure, not a DNS one.
+
+**`.test` is reserved by the same RFC for testing and has no special resolver
+behaviour**, so it works identically from the host, the devcontainer, and every
+app container.
+
+The cost is one line in the host's `/etc/hosts` — **run this on the host, not in
+the devcontainer**:
+
+```bash
+sudo sh -c 'echo "127.0.0.1 pjx.test ql.pjx.test api.pjx.test node.pjx.test sso.pjx.test grafana.pjx.test" >> /etc/hosts'
+getent hosts pjx.test     # → 127.0.0.1
+```
+
+Containers get their entries from `extra_hosts` in step 4.
 
 ---
 
@@ -101,8 +161,12 @@ services:
       - "443:443"
       - "9090:8080"
     volumes:
+      # docker provider: watch the Docker API for containers and their
+      # traefik.* labels. Read-only — Traefik only needs to observe.
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./central-router/config:/traefik/config/
+      # file provider: the TLS store and certificates (step 3).
+      # HOST_PROJECT_PATH is required — see the warning below.
+      - ${HOST_PROJECT_PATH:-..}/local/central-router/config:/traefik/config/
     networks:
       - pjx-network
     extra_hosts:
@@ -113,6 +177,45 @@ networks:
     external: true
     name: pjx-network
 ```
+
+### The two volume mounts, and why the second needs `HOST_PROJECT_PATH`
+
+Each mount serves one provider:
+
+| Mount | Provider | Purpose |
+|---|---|---|
+| `/var/run/docker.sock` | `--providers.docker` | Watch container events and read `traefik.*` labels → routing |
+| `local/central-router/config` | `--providers.file` | `tls.yml` and the mkcert certificates → TLS |
+
+So routing comes from labels (step 2) and TLS comes from files (step 3).
+
+> ⚠️ **The config mount must emit a host path.** Under
+> docker-outside-of-docker the **host daemon** resolves bind-mount sources. A
+> plain `./central-router/config` expands to
+> `/workspaces/pjx-root/local/central-router/config` when compose runs inside the
+> devcontainer — a path that does not exist on the host, so Docker silently
+> creates an empty directory and mounts that. Traefik then starts with no TLS
+> config and no certificates, and the failure presents as a certificate error
+> rather than a path error.
+>
+> This is the same problem as
+> [Phase 1 Step 6a](phase-1-script-layer.md#step-6a--emit-host-paths-for-bind-mounts),
+> and it is exactly why `CDE:local/docker-compose.yml` writes
+> `${HOST_PROJECT_PATH}/local/central-router/config`.
+>
+> The fallback is `..` rather than `.` here, because this compose file lives in
+> `local/` while `HOST_PROJECT_PATH` points at the repo root.
+>
+> Verify after starting Traefik:
+> ```bash
+> docker inspect pjx-router-traefik-1 --format '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}'
+> #   → the config source must be an absolute HOST path, not /workspaces/...
+> ```
+
+> **Socket access is privileged.** Read access to the Docker socket is enough to
+> enumerate and inspect every container on the host. Acceptable for local
+> development; a production Traefik would sit behind a socket proxy that exposes
+> only the endpoints it needs. Out of scope here, worth knowing.
 
 Two providers are enabled deliberately, and this is where we diverge from the
 reference architecture:
@@ -130,9 +233,12 @@ both providers is the same capability with half the moving parts. See the
 The `constraint-label` matters: without it Traefik would try to route the
 `workspace` devcontainer service too.
 
-> `pjx-network` is declared `external` here, so it must already exist. It is
-> created by `docker-compose.devcontainer.yml`. Start the app stack before the
-> router, or run `docker network create pjx-network` once.
+> `pjx-network` is declared `external` here, so it must already exist —
+> `docker-compose.devcontainer.yml` owns it. **Always start the app stack first**
+> (`dev-up.sh -d`), then the router. Do **not** create the network by hand: a
+> hand-created network lacks compose's labels, after which compose refuses to
+> adopt it and the devcontainer ends up detached. See the warning under
+> "Verify step 2" below.
 
 ---
 
@@ -147,35 +253,35 @@ in parallel means a broken label does not cost you a working environment.
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-web.rule=Host(`pjx.localhost`)"
+      - "traefik.http.routers.pjx-web.rule=Host(`pjx.test`)"
       - "traefik.http.services.pjx-web.loadbalancer.server.port=3000"
 
   pjx-graphql-apollo:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-ql.rule=Host(`ql.pjx.localhost`)"
+      - "traefik.http.routers.pjx-ql.rule=Host(`ql.pjx.test`)"
       - "traefik.http.services.pjx-ql.loadbalancer.server.port=4000"
 
   pjx-api-dotnet:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-api.rule=Host(`api.pjx.localhost`)"
+      - "traefik.http.routers.pjx-api.rule=Host(`api.pjx.test`)"
       - "traefik.http.services.pjx-api.loadbalancer.server.port=80"
 
   pjx-api-node:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-node.rule=Host(`node.pjx.localhost`)"
+      - "traefik.http.routers.pjx-node.rule=Host(`node.pjx.test`)"
       - "traefik.http.services.pjx-node.loadbalancer.server.port=8081"
 
   pjx-sso-identityserver:
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
-      - "traefik.http.routers.pjx-sso.rule=Host(`sso.pjx.localhost`)"
+      - "traefik.http.routers.pjx-sso.rule=Host(`sso.pjx.test`)"
       - "traefik.http.services.pjx-sso.loadbalancer.server.port=80"
 ```
 
@@ -199,7 +305,7 @@ back to the origin port. Add to the `pjx-web-react` environment:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
-      - WDS_SOCKET_HOST=pjx.localhost
+      - WDS_SOCKET_HOST=pjx.test
       - WDS_SOCKET_PORT=80
 ```
 
@@ -212,21 +318,62 @@ production build.
 
 ### Verify step 2 before continuing
 
-```bash
-docker network create pjx-network 2>/dev/null || true
-dev-up.sh -d
-docker compose -f local/docker-compose.yml up -d
+**Start the stacks inside the devcontainer** — `dev-up.sh` is on `$PATH` there,
+and both compose files need `HOST_PROJECT_PATH` for their bind mounts:
 
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: pjx.localhost'      http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: ql.pjx.localhost'   http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: api.pjx.localhost'  http://localhost/swagger
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: node.pjx.localhost' http://localhost/
-curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: sso.pjx.localhost'  http://localhost/
+```bash
+dev-up.sh -d                                       # owns pjx-network; must be first
+docker compose -f local/docker-compose.yml up -d   # joins it as external
+docker compose -f local/docker-compose.yml ps      # traefik should be Up
 ```
 
-All five should return 2xx or 3xx. If any returns 404, the router did not pick up
-that label — check `http://localhost:9090/dashboard/` and fix before proceeding.
-Do not stack TLS on top of broken routing.
+> ⚠️ **Never run `docker network create pjx-network`.**
+> `docker-compose.devcontainer.yml` declares the network as **compose-managed**
+> (`driver: bridge`), so compose creates it with `com.docker.compose.*` labels and
+> attaches the devcontainer to it. A hand-created network has no labels, and
+> compose then refuses to adopt it:
+>
+> ```
+> network pjx-network was found but has incorrect label
+> com.docker.compose.network set to "" (expected: "pjx-network")
+> ```
+>
+> It also leaves the devcontainer detached from the network, which silently breaks
+> `status.sh` (its health URLs resolve service names over `pjx-network`).
+>
+> Recovery: `docker network rm pjx-network`, then **Rebuild and Reopen in
+> Container** so VS Code's compose recreates and reattaches it properly.
+>
+> Ownership summary — the app stack creates it, Traefik joins it:
+>
+> | File | Declaration | Role |
+> |---|---|---|
+> | `docker-compose.devcontainer.yml` | `driver: bridge` | owns and labels it |
+> | `local/docker-compose.yml` | `external: true` | joins it |
+
+**Run the routing checks on the HOST.** Traefik publishes 80/443 on the host;
+inside the devcontainer `localhost:80` is its own empty loopback and every check
+would return `000`, looking like broken routing:
+
+```bash
+for h in pjx ql.pjx node.pjx sso.pjx; do
+  printf '%-16s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $h.test" http://localhost/)"
+done
+printf '%-16s %s\n' "api.pjx" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: api.pjx.test' http://localhost/swagger)"
+```
+
+All five should return 2xx or 3xx. If any returns 404, Traefik did not pick up
+that service's labels — check the dashboard at
+<http://localhost:9090/dashboard/> (host browser) and fix before proceeding. Do
+not stack TLS on top of broken routing.
+
+> **To test from inside the devcontainer instead**, target Traefik by service name
+> rather than localhost — it is on `pjx-network`:
+> ```bash
+> curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: pjx.test' http://traefik/
+> ```
+> Useful, but the host version is the more meaningful check: it is the exact path
+> your browser takes.
 
 ---
 
@@ -248,18 +395,18 @@ export CAROOT="$(pwd)/local/central-router/config/ca"
 mkcert -install
 
 cd local/central-router/config/cert
-mkcert "*.pjx.localhost" "pjx.localhost" "localhost" "127.0.0.1"
+mkcert "*.pjx.test" "pjx.test" "localhost" "127.0.0.1"
 cd -
 ls local/central-router/config/cert/
 ```
 
-> A wildcard `*.pjx.localhost` does **not** cover the bare `pjx.localhost`.
+> A wildcard `*.pjx.test` does **not** cover the bare `pjx.test`.
 > Both names must be on the certificate — that is why they are listed
 > separately above. Getting this wrong produces a browser warning only on the
 > root hostname, which is easy to misdiagnose.
 
 mkcert names files after the first SAN, e.g.
-`_wildcard.pjx.localhost+3.pem` and `_wildcard.pjx.localhost+3-key.pem`.
+`_wildcard.pjx.test+3.pem` and `_wildcard.pjx.test+3-key.pem`.
 Check the actual filenames and use them below.
 
 Create `local/central-router/config/tls.yml`:
@@ -269,11 +416,11 @@ tls:
   stores:
     default:
       defaultCertificate:
-        certFile: /traefik/config/cert/_wildcard.pjx.localhost+3.pem
-        keyFile: /traefik/config/cert/_wildcard.pjx.localhost+3-key.pem
+        certFile: /traefik/config/cert/_wildcard.pjx.test+3.pem
+        keyFile: /traefik/config/cert/_wildcard.pjx.test+3-key.pem
   certificates:
-    - certFile: /traefik/config/cert/_wildcard.pjx.localhost+3.pem
-      keyFile: /traefik/config/cert/_wildcard.pjx.localhost+3-key.pem
+    - certFile: /traefik/config/cert/_wildcard.pjx.test+3.pem
+      keyFile: /traefik/config/cert/_wildcard.pjx.test+3-key.pem
 ```
 
 Add TLS and an HTTP→HTTPS redirect to each router's labels — for example on
@@ -282,20 +429,46 @@ Add TLS and an HTTP→HTTPS redirect to each router's labels — for example on
 ```yaml
       - "traefik.http.routers.pjx-web.entrypoints=https"
       - "traefik.http.routers.pjx-web.tls=true"
-      - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.localhost`)"
+      - "traefik.http.routers.pjx-web-http.rule=Host(`pjx.test`)"
       - "traefik.http.routers.pjx-web-http.entrypoints=http"
-      - "traefik.http.routers.pjx-web-http.middlewares=to-https"
+      - "traefik.http.routers.pjx-web-http.middlewares=to-https@file"
 ```
 
-And define the redirect middleware once, on the Traefik service in
-`local/docker-compose.yml`:
+Note the `@file` suffix on the middleware — it is required, and the reason is the
+next step.
+
+And define the redirect middleware once, in the **file provider** —
+`local/central-router/config/middlewares.yml`:
 
 ```yaml
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.to-https.redirectscheme.permanent=false"
+http:
+  middlewares:
+    to-https:
+      redirectScheme:
+        scheme: https
+        permanent: false
 ```
+
+> **Do not define this via labels on the Traefik container.** The docker provider
+> runs with
+> `--providers.docker.constraints=Label(`traefik.constraint-label`, `pjx-public`)`,
+> and the Traefik container does not carry that label — so Traefik silently
+> filters out its own labels and the middleware is never created. The failure is
+> quiet: the redirect routers appear in the API but with
+>
+> ```json
+> "error": ["middleware \"to-https@docker\" does not exist"],
+> "status": "disabled"
+> ```
+>
+> and HTTP returns **404** rather than a redirect. Diagnose with
+> `curl -s http://localhost:9090/api/http/routers/pjx-web-http@docker`.
+>
+> Defining it in the file provider is also the better fit: a redirect rule is
+> shared infrastructure, not a property of any one container. It lives naturally
+> beside `tls.yml`, and Traefik reloads it live via
+> `--providers.file.watch=true` — no restart. Because it comes from a different
+> provider than the routers, references must be qualified: `to-https@file`.
 
 Repeat the four-label pattern for the other four services. Then update
 `WDS_SOCKET_PORT=443` for the React service.
@@ -303,36 +476,186 @@ Repeat the four-label pattern for the other four services. Then update
 > Keep `permanent=false` (a 302). A permanent 301 gets cached hard by browsers,
 > which is painful if you later need to debug something over plain HTTP.
 
-### Commit the CA, not the key
+### Verify step 3 before continuing
 
-```gitignore
-# Local TLS material — the CA cert is shared so teammates can trust it;
-# private keys never are.
-local/central-router/config/ca/rootCA-key.pem
-local/central-router/config/cert/*-key.pem
+Do not stack Step 4 (devcontainer hostnames) or Step 5 (OIDC) on unverified TLS —
+Step 5 is the most failure-prone part of this phase and you want a known-good
+base under it.
+
+**Run these on the HOST.** Two quirks to know:
+
+- `.test` has no automatic resolution, so the host `/etc/hosts` line from the
+  Hostname map section must be in place or every check fails at DNS.
+- `mkcert -install` ran in the **devcontainer**, so the CA is in *that* trust
+  store, not the host's. Host `curl` will fail verification until you import the
+  CA (Step 4). Pass `--cacert` instead — it proves the chain without touching the
+  host trust store.
+
+```bash
+CFG=<repo>/local/central-router/config
+CA="$CFG/ca/rootCA.pem"
+CERT=$(ls "$CFG"/cert/*.pem | grep -v -- '-key' | head -1)
+
+# 1. Certificate covers BOTH the wildcard and the apex
+openssl x509 -in "$CERT" -noout -subject -ext subjectAltName
+#   → must list *.pjx.test AND pjx.test
+
+# 2. Handshake serves that cert and chains to your CA
+echo | openssl s_client -connect pjx.test:443 -servername pjx.test \
+  -CAfile "$CA" 2>&1 | grep -E 'Verify return code|subject=|issuer='
+#   → "Verify return code: 0 (ok)"
+
+# 3. HTTP redirects to HTTPS
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://pjx.test/
+#   → 302 https://pjx.test/
+
+# 4. All five services over HTTPS
+for h in pjx ql.pjx api.pjx node.pjx sso.pjx; do
+  printf '  %-20s %s\n' "$h.test" \
+    "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 --cacert "$CA" https://$h.test/)"
+done
+#   → 2xx/3xx; ql.pjx returns 400 (Apollo's "GET query missing" — it routed)
+
+# 5. TEN docker routers now, not five
+curl -s http://localhost:9090/api/http/routers | grep -o '"name":"[^"]*@docker"' | sort
+#   → each service has an HTTPS router AND an -http redirect router
 ```
 
-CloudDevEnvironment commits both halves. Do not copy that — commit the public
-CA certificate so others can import it, and keep every private key out of git.
-Anyone cloning regenerates their own leaf certs with the commands above.
+Check 5 catches a missed label fastest. Check 2 returning a non-zero verify code
+usually means `tls.yml` references filenames that do not exist — mkcert names
+files after the first SAN, e.g. `_wildcard.pjx.test+3.pem`.
+
+### Commit none of the TLS material
+
+```gitignore
+# Local TLS material. mkcert generates a per-machine CA, so none of this is
+# shareable: without rootCA-key.pem nobody else can sign with this CA, and
+# without the leaf key Traefik cannot serve it. Everyone runs mkcert locally —
+# see docs/architecture-upgrade/phase-2-traefik.md step 3.
+local/central-router/config/ca/
+local/central-router/config/cert/
+```
+
+CloudDevEnvironment commits both halves of its CA, including the private key.
+Do not copy that.
+
+An earlier draft of this doc said to commit the public `rootCA.pem` "so teammates
+can import it". That reasoning does not survive contact with how mkcert works:
+the CA is per-machine, and without `rootCA-key.pem` a cloner cannot sign anything
+with it, while the leaf certificate is useless without its key. They will run
+`mkcert` and generate their own CA regardless — so the committed public halves
+are dead weight that look authoritative and go stale.
+
+**Commit `tls.yml` and `middlewares.yml`** (config, no secrets) and ignore
+`ca/` and `cert/` wholesale. `tls.yml`'s filenames stay valid across machines
+because mkcert names files deterministically from the SAN list, so the same
+command produces `_wildcard.pjx.test+3.pem` for everyone.
+
+Verify before pushing:
+
+```bash
+git show --stat HEAD | grep -E 'key|\.pem' || echo "no key material committed"
+```
 
 ---
 
 ## Step 4 — Teach the devcontainer the hostnames
 
-In `.devcontainer/devcontainer.json`, add `runArgs` (the pattern is from
-`CDE:.devcontainer/devcontainer.json:8-21`):
+> ⚠️ **Do not use `runArgs`.** `CDE:.devcontainer/devcontainer.json:8-21` uses
+> `runArgs` with `--add-host`, but that property is only valid for devcontainers
+> based on `image` or `build`/`dockerFile`. CloudDevEnvironment uses
+> `"dockerFile"`; pjx uses `"dockerComposeFile"`, and VS Code rejects it with
+> **"Property runArgs is not allowed"**. For compose-based devcontainers the
+> equivalent is `extra_hosts:` on the service.
+>
+> The **address also differs**. CloudDevEnvironment maps these names to
+> `127.0.0.1` because it runs docker-in-docker — its containers publish inside
+> the devcontainer, so loopback is right there. Under docker-outside-of-docker,
+> Traefik publishes on the **host**, and `127.0.0.1` inside the devcontainer is
+> its own loopback where nothing listens. Use `host-gateway`.
 
-```jsonc
-"runArgs": [
-  "--add-host=pjx.localhost:127.0.0.1",
-  "--add-host=ql.pjx.localhost:127.0.0.1",
-  "--add-host=api.pjx.localhost:127.0.0.1",
-  "--add-host=node.pjx.localhost:127.0.0.1",
-  "--add-host=sso.pjx.localhost:127.0.0.1",
-  "--add-host=grafana.pjx.localhost:127.0.0.1"
-],
+Add to the `workspace` service in `docker-compose.devcontainer.yml`:
+
+```yaml
+  workspace:
+    # Resolve the Traefik hostnames from inside the devcontainer. host-gateway
+    # (not 127.0.0.1) because Traefik publishes on the HOST under
+    # docker-outside-of-docker.
+    extra_hosts:
+      - "pjx.test:host-gateway"
+      - "ql.pjx.test:host-gateway"
+      - "api.pjx.test:host-gateway"
+      - "node.pjx.test:host-gateway"
+      - "sso.pjx.test:host-gateway"
+      - "grafana.pjx.test:host-gateway"
 ```
+
+**Also add `extra_hosts` to `pjx-api-dotnet`.** Step 5 sets
+`PJX_SSO__AUTHORITY=https://sso.pjx.test`, and that container needs to resolve
+it — the API must reach the SSO server by its *public* hostname, not the internal
+service name, because the token's `iss` claim will be `https://sso.pjx.test` and
+the authority must match exactly:
+
+```yaml
+  pjx-api-dotnet:
+    extra_hosts:
+      - "sso.pjx.test:host-gateway"
+```
+
+Verify after rebuilding, from inside the container:
+
+```bash
+getent hosts pjx.test                                   # → a gateway IP (172.x.x.x)
+curl -s -o /dev/null -w '%{http_code}\n' https://pjx.test/    # → 200
+docker exec pjx-api-dotnet-dev getent hosts sso.pjx.test      # → the same gateway IP
+```
+
+The third check is the one that silently breaks Step 5 if skipped.
+
+> ### Three things a devcontainer rebuild destroys
+>
+> `runArgs`/`extra_hosts` changes require a rebuild, and a rebuild discards
+> everything installed or configured **inside** the container at runtime. Expect
+> these to vanish, repeatedly, until they are made durable:
+>
+> | Lost | Symptom | Durable home |
+> |---|---|---|
+> | mkcert binary | `mkcert: command not found` | `.devcontainer/Dockerfile` |
+> | mkcert CA in the trust store | `curl` → `000`, verbose shows `unable to get local issuer certificate`; works with `--cacert` | `.devcontainer/postStart.sh` |
+> | git `safe.directory` + identity | `dubious ownership`, forcing you to commit from the host | `.devcontainer/setup.sh` |
+>
+> The CA belongs in `postStart.sh` rather than the image because it is repo state,
+> regenerated per developer, and the Dockerfile's build context is `.devcontainer`
+> so it cannot `COPY` from `local/`:
+>
+> ```bash
+> CA=/workspaces/pjx-root/local/central-router/config/ca/rootCA.pem
+> if [ -f "$CA" ] && [ ! -f /usr/local/share/ca-certificates/pjx-mkcert-ca.crt ]; then
+>     sudo cp "$CA" /usr/local/share/ca-certificates/pjx-mkcert-ca.crt
+>     sudo update-ca-certificates >/dev/null 2>&1
+>     echo "Installed pjx mkcert CA into the trust store"
+> fi
+> ```
+>
+> And in the Dockerfile, pinned so a rebuild months from now is reproducible:
+>
+> ```dockerfile
+> ARG MKCERT_VERSION=v1.4.4
+> RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
+>     && rm -rf /var/lib/apt/lists/* \
+>     && curl -fsSL "https://github.com/FiloSottile/mkcert/releases/download/${MKCERT_VERSION}/mkcert-${MKCERT_VERSION}-linux-amd64" \
+>          -o /usr/local/bin/mkcert \
+>     && chmod +x /usr/local/bin/mkcert
+> ```
+>
+> When regenerating certificates, always
+> `export CAROOT=/workspaces/pjx-root/local/central-router/config/ca` first, so
+> mkcert reuses the committed CA instead of creating a new one — otherwise every
+> developer needs a fresh browser import.
+
+The second check matters beyond convenience: [Step 5](#step-5--move-the-oidc-configuration)
+has the .NET API validating tokens against `https://sso.pjx.test` from
+inside a container, which needs exactly this resolution path.
 
 Replace the whole `forwardPorts` / `portsAttributes` block. Only the router's
 ports need forwarding now:
@@ -376,20 +699,88 @@ only if you actually hit the problem; on Linux without WSL you usually will not.
 by exact string match, and IdentityServer4 validates that the token issuer
 matches the authority the client asked for. Three files must agree.
 
+### 5o — Prerequisites, both easy to miss
+
+Do these **before** touching redirect URIs. Each one fails in a way that looks
+like an OIDC bug.
+
+**(i) The API must trust the mkcert CA.** It fetches the discovery document over
+HTTPS, and its container has its own trust store. Without this,
+`curl https://sso.pjx.test/.well-known/openid-configuration` from inside
+`pjx-api-dotnet` returns `000` with
+`SSL certificate problem: unable to get local issuer certificate`.
+
+```yaml
+  pjx-api-dotnet:
+    volumes:
+      - ${HOST_PROJECT_PATH:-.}/local/central-router/config/ca/rootCA.pem:/usr/local/share/ca-certificates/pjx-mkcert-ca.crt:ro
+    command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
+```
+
+Mounting alone is not enough — Debian needs `update-ca-certificates` to rebuild
+the bundle, hence the wrapped command.
+
+**(ii) IdentityServer must honour `X-Forwarded-Proto`.** Traefik terminates TLS
+and forwards over plain HTTP on port 80. ASP.NET Core ignores the forwarded
+scheme unless the ForwardedHeaders middleware is enabled, so IdentityServer
+advertises **`http://`** endpoints:
+
+```
+"issuer":"http://sso.pjx.test"
+"authorization_endpoint":"http://sso.pjx.test/connect/authorize"
+```
+
+With that, tokens carry `iss: http://sso.pjx.test` while the API expects
+`https://…`, so **every token is rejected** and `oidc-client`'s issuer check
+fails. No amount of care with redirect URIs fixes it.
+
+In `projects/pjx-sso-identityserver/Startup.cs`, in `Configure()`, **before**
+`UseIdentityServer()`:
+
+```csharp
+using Microsoft.AspNetCore.HttpOverrides;   // at the top of the file
+
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+// Defaults trust loopback only; Traefik is a sibling container with a private
+// IP on pjx-network. Safe to clear — the container is only reachable via Traefik.
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+```
+
+> `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` looks like an easier route but does
+> **not** work here: it leaves `KnownProxies`/`KnownNetworks` at loopback-only, so
+> Traefik's headers are discarded. The code version is required.
+
+Add the same block to `pjx-api-dotnet`'s `Startup.cs` so any absolute URLs it
+generates carry the right scheme.
+
+**Gate before continuing:**
+
+```bash
+docker exec pjx-api-dotnet-dev sh -c 'curl -s https://sso.pjx.test/.well-known/openid-configuration' | grep -o '"issuer":"[^"]*"'
+#   → "issuer":"https://sso.pjx.test"      ← https, not http
+```
+
+---
+
 **5a. `projects/pjx-sso-identityserver/Config.cs`** — the `pjx-web-react` client
 at lines 90-98:
 
 ```csharp
 ClientId = "pjx-web-react",
-RedirectUris =           { "https://pjx.localhost/signin-oidc",
-                           "https://pjx.localhost/dashboard",
-                           "https://pjx.localhost/callback" },
-PostLogoutRedirectUris = { "https://pjx.localhost",
-                           "https://pjx.localhost/logout/callback" },
-AllowedCorsOrigins =     { "https://pjx.localhost" },
+RedirectUris =           { "https://pjx.test/signin-oidc",
+                           "https://pjx.test/dashboard",
+                           "https://pjx.test/callback" },
+PostLogoutRedirectUris = { "https://pjx.test",
+                           "https://pjx.test/logout/callback" },
+AllowedCorsOrigins =     { "https://pjx.test" },
 ```
 
-Add `https://pjx.localhost/silentrenew` to `RedirectUris` as well — the React
+Add `https://pjx.test/silentrenew` to `RedirectUris` as well — the React
 app sets `REACT_APP_SILENT_REDIRECT_URL` and silent renew fails without it.
 
 > The `mvc` (line 51) and `js` (line 71) clients still point at
@@ -405,14 +796,14 @@ cp projects/pjx-web-react/.env projects/pjx-web-react/.env.phase2-backup
 
 ```dotenv
 NODE_ENV=development
-REACT_APP_GRAPHQL_ENDPOINT=https://ql.pjx.localhost
-REACT_APP_SSO_ISSUER_URL=https://sso.pjx.localhost
+REACT_APP_GRAPHQL_ENDPOINT=https://ql.pjx.test
+REACT_APP_SSO_ISSUER_URL=https://sso.pjx.test
 REACT_APP_SSO_CLIENT_ID=pjx-web-react
-REACT_APP_SSO_REDIRECT_URL=https://pjx.localhost/signin-oidc
-REACT_APP_PUBLIC_URL=https://pjx.localhost
-REACT_APP_LOGOFF_REDIRECT_URL=https://pjx.localhost/logout/callback
-REACT_APP_SILENT_REDIRECT_URL=https://pjx.localhost/silentrenew
-REACT_APP_API_DOTNET_URL=https://api.pjx.localhost
+REACT_APP_SSO_REDIRECT_URL=https://pjx.test/signin-oidc
+REACT_APP_PUBLIC_URL=https://pjx.test
+REACT_APP_LOGOFF_REDIRECT_URL=https://pjx.test/logout/callback
+REACT_APP_SILENT_REDIRECT_URL=https://pjx.test/silentrenew
+REACT_APP_API_DOTNET_URL=https://api.pjx.test
 ```
 
 Also commit a `projects/pjx-web-react/.env.example` with these values. The
@@ -422,10 +813,10 @@ unnoticed.
 **5c. `PJX_SSO__AUTHORITY`** in `docker-compose.devcontainer.yml:46` — this is
 the .NET API validating tokens *server-side*, so it uses the internal service
 name today (`https://pjx-sso-identityserver`). It must now match the **issuer**
-in the tokens the SSO server mints, which is `https://sso.pjx.localhost`:
+in the tokens the SSO server mints, which is `https://sso.pjx.test`:
 
 ```yaml
-      - PJX_SSO__AUTHORITY=https://sso.pjx.localhost
+      - PJX_SSO__AUTHORITY=https://sso.pjx.test
 ```
 
 Because that resolves through Traefik, the API container needs the hostname and
@@ -433,7 +824,7 @@ the CA. Add to the `pjx-api-dotnet` service:
 
 ```yaml
     extra_hosts:
-      - "sso.pjx.localhost:host-gateway"
+      - "sso.pjx.test:host-gateway"
 ```
 
 If the API rejects tokens with a certificate-validation error, the container
@@ -473,22 +864,22 @@ curl -s http://localhost:9090/api/overview | head -c 200
 curl -s http://localhost:9090/api/http/routers | grep -c '"name"'   # ≥ 5
 
 # 2. HTTP redirects to HTTPS
-curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://pjx.localhost/
-# → 302 https://pjx.localhost/
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://pjx.test/
+# → 302 https://pjx.test/
 
 # 3. TLS is valid, not self-signed-untrusted
-curl -sI https://pjx.localhost/ | head -1
-echo | openssl s_client -connect pjx.localhost:443 -servername pjx.localhost 2>/dev/null \
+curl -sI https://pjx.test/ | head -1
+echo | openssl s_client -connect pjx.test:443 -servername pjx.test 2>/dev/null \
   | openssl x509 -noout -subject -ext subjectAltName
 
 # 4. Every service answers over HTTPS
 for h in pjx ql.pjx api.pjx node.pjx sso.pjx; do
-  printf '%-18s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' https://$h.localhost/)"
+  printf '%-18s %s\n' "$h" "$(curl -s -o /dev/null -w '%{http_code}' https://$h.test/)"
 done
 
 # 5. OIDC discovery document reports the NEW issuer
-curl -s https://sso.pjx.localhost/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'
-# → "issuer":"https://sso.pjx.localhost"
+curl -s https://sso.pjx.test/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'
+# → "issuer":"https://sso.pjx.test"
 
 # 6. No app ports are published any more
 docker ps --format '{{.Names}}\t{{.Ports}}' | grep pjx-
@@ -497,10 +888,10 @@ docker ps --format '{{.Names}}\t{{.Ports}}' | grep pjx-
 **Then the manual test that actually matters** — the automated checks above
 cannot confirm OIDC works. In a browser:
 
-1. Open `https://pjx.localhost` — no certificate warning.
+1. Open `https://pjx.test` — no certificate warning.
 2. Register a new account; read the activation code from
    `docker logs pjx-sso-identityserver-dev`.
-3. Activate, then log in — you should land back on `https://pjx.localhost`
+3. Activate, then log in — you should land back on `https://pjx.test`
    authenticated. **This is the real pass/fail for Phase 2.**
 4. Visit `/country/all` — exercises the .NET API with a bearer token, i.e. it
    proves step 5c worked.

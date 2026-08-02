@@ -99,93 +99,115 @@ Clone [pjx-root](https://github.com/mikelau13/pjx-root) repo. This is to make th
 
 ## How does it work?
 
-Once you've cloned this repo you will see an empty folder `/projects`.
+The five services live under `projects/` and are **vendored into this
+repository** — they are tracked in git, not submodules and not gitignored. You
+do not need to clone them separately; `git clone` of pjx-root brings everything.
 
-This folder contains other cloned github repos, where each repo represents a dockerized project. (ie. api, Apollo server, web client, etc). The contents of this folder are ignored by git, and should not be committed to version control - you download the repos and launch them, but not supposed to make or commit any changes inside `projects` folder.
+| Directory | Service |
+|---|---|
+| `projects/pjx-web-react` | React SPA |
+| `projects/pjx-graphql-apollo` | Apollo GraphQL gateway |
+| `projects/pjx-api-node` | Node/Restify API |
+| `projects/pjx-api-dotnet` | .NET API |
+| `projects/pjx-sso-identityserver` | OIDC identity server |
 
+Everything runs behind a **Traefik** reverse proxy on `*.pjx.test` with
+locally-trusted TLS. See
+[docs/reference/request-flow.md](docs/reference/request-flow.md) for how a
+request actually reaches a container, and
+[docs/architecture-upgrade/](docs/architecture-upgrade/README.md) for the
+migration plan this setup came from.
+
+---
+
+## Running the stack
+
+Development happens inside a **VS Code Dev Container**. It runs
+docker-outside-of-docker, so the app containers are siblings on your host's
+Docker daemon rather than nested inside the devcontainer.
+
+### 1. Prerequisites, on the host
+
+Add the dev hostnames to `/etc/hosts` — `.test` has no automatic resolution:
+
+```bash
+sudo sh -c 'echo "127.0.0.1 pjx.test ql.pjx.test api.pjx.test node.pjx.test sso.pjx.test grafana.pjx.test" >> /etc/hosts'
+```
+
+Ports **80**, **443** and **9090** must be free — Traefik claims them. If you
+also use another Traefik-based environment, stop it first, and check for
+leftover host processes holding the ports:
+
+```bash
+sudo ss -tlnp | grep -E ':(80|443|9090) '
+```
+
+### 2. Open in the Dev Container
+
+Open the repo in VS Code and choose **Reopen in Container** (or `Ctrl+Shift+P` →
+*Dev Containers: Reopen in Container*). First build takes a few minutes;
+`postCreateCommand` installs all Node and .NET dependencies.
+
+### 3. Generate TLS certificates (first time only)
+
+```bash
+cd local/central-router/config/cert
+export CAROOT=/workspaces/pjx-root/local/central-router/config/ca
+mkcert -install
+mkcert "*.pjx.test" "pjx.test" "localhost" "127.0.0.1"
+```
+
+Then trust the CA in your **host** browser — Chrome:
+`chrome://settings/certificates` → *Authorities* → **Import** →
+`local/central-router/config/ca/rootCA.pem`.
+
+TLS material is gitignored: mkcert CAs are per-machine, so everyone generates
+their own.
+
+### 4. Start everything
+
+From a terminal **inside the devcontainer**:
+
+```bash
+dev-up.sh -d                                       # the five app services
+docker compose -f local/docker-compose.yml up -d   # Traefik
+status.sh                                          # health table
+```
+
+| Script | Does |
+|---|---|
+| `dev-up.sh [-b] [-d\|-w]` | start the stack — build / detached / watch |
+| `stop.sh` | stop containers, keep them |
+| `clean.sh` | remove containers and volumes (prompts first — destroys the SQLite databases) |
+| `status.sh` | per-service container state and HTTP health |
+| `validate.sh <test\|build\|lint> [project]` | build or test one project or all |
+
+### Service URLs
+
+| Service | URL |
+|---|---|
+| React SPA | <https://pjx.test> |
+| GraphQL | <https://ql.pjx.test> |
+| .NET API | <https://api.pjx.test/swagger> |
+| Node API | <https://node.pjx.test> |
+| Identity Server | <https://sso.pjx.test> |
+| Traefik dashboard | <http://localhost:9090/dashboard/> |
+
+Plain `http://` redirects to `https://`.
+
+---
 
 ## Helm Charts
 
-```ps
+```bash
 helm install pjx-release helm-pjx/
 ```
 
-
-
-## Running a solution
-
-### Option 1: Traditional Docker Compose
-
-To run the `pjx` solution, clone all the required repos inside the `projects` folder, then run the `docker-compose up` on the root folder:
-
-```bash
-cd ./projects
-git clone https://github.com/mikelau13/pjx-graphql-apollo.git
-git clone https://github.com/mikelau13/pjx-api-node.git
-git clone https://github.com/mikelau13/pjx-api-dotnet.git
-git clone https://github.com/mikelau13/pjx-sso-identityserver.git
-git clone https://github.com/mikelau13/pjx-web-react.git
-docker-compose -f ../docker-compose.yml up
-```
-
-### Option 2: WSL Development Container (Recommended for Development)
-
-For development with full IDE support, debugging, and hot-reload capabilities:
-
-1a. **Open in VS Code Dev Container:**
-   - Clone this repository to your WSL file system
-   - Open the repository in VS Code
-   - When prompted, click "Reopen in Container" or run `Ctrl+Shift+P` → "Dev Containers: Reopen in Container"
-
-1b. **Or open folder directly from WSL command line**
-   - `devcontainers@AWMD-48MYC44:/mnt/f/repos/pjx$ code .`
-
-2. **Start all services:**
-   ```bash
-   docker-compose -f docker-compose.devcontainer.yml up
-   ```
-
-3. **Individual Service Development:**
-   Each service has its own `.devcontainer` folder. You can open any individual service in its own container:
-   - `projects/pjx-web-react/` - React frontend development
-   - `projects/pjx-api-node/` - Node.js API development
-   - `projects/pjx-graphql-apollo/` - GraphQL server development
-   - `projects/pjx-api-dotnet/` - .NET API development
-   - `projects/pjx-sso-identityserver/` - Identity server development
-
-**Benefits of Dev Container approach:**
-- Full IntelliSense and debugging support
-- Hot reload for all services
-- Consistent development environment across team members
-- Integrated terminal access to each service
-- Pre-configured extensions and settings
-
-Execute this command to stop them:
-
-```bash
-$ docker-compose -f ../docker-compose.yml down
-```
-
-On development environment, you might want to first prune all containers to avoid any conflicts:
-
-```bash
-docker system prune
-```
-
-Then verify your containers are up and running:
-
-```bash
-$ docker ps
-```
-
-### Hosts and SSL
-
-For localhost testing, you will need to set up the `hosts` file and trust the SSL certificate for your machine/web browsers, please follow the instructions on my other project [pjx-sso-identityserver](https://github.com/mikelau13/pjx-sso-identityserver).
-
+---
 
 ### Using the web app
 
-You can now visit `http://localhost:3000` to try the website, there are few sanity testing you can try:
+Visit <https://pjx.test> to try the website. A few sanity checks:
 
 - register a new account - verify if the web app `client side` is consuming the `Identity Server API`, with `SSL` and `CoRS` settings, properly or not
 <br/><img src="/images/user_registration.png" alt="pjx user registration" style="max-width: 60%;" />
@@ -204,11 +226,11 @@ You can now visit `http://localhost:3000` to try the website, there are few sani
 - Sign Out
 <br/><img src="/images/user_signout.png" alt="pjx user signout" style="max-width: 50%;" />
 
-- visit the GraphQL playground of the Apollo Server - http://localhost:4000
+- visit the GraphQL playground of the Apollo Server - https://ql.pjx.test
 ![pjx graphql playground](/images/apollo_query.png)
-- try out the Swagger of the .NET Core API - http://localhost:6001/swagger/
+- try out the Swagger of the .NET Core API - https://api.pjx.test/swagger/
 ![pjx api swagger](/images/api_swagger.png)
-- try out the Swagger of the Identity Server - https://pjx-sso-identityserver/swagger
+- try out the Swagger of the Identity Server - https://sso.pjx.test/swagger
 ![pjx sso swagger](/images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
 ![pjx html responsive](/images/mobile_desktop.png)

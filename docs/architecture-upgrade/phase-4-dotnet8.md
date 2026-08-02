@@ -184,7 +184,7 @@ validation is a protocol boundary, not a library one; a `net8.0` API validating
 tokens from a `netcoreapp3.1` issuer is a normal arrangement.
 
 > `options.RequireHttpsMetadata = false` at `Startup.cs:72` is marked TODO in the
-> source. Phase 2 moved the authority to `https://sso.pjx.localhost`, so this can
+> source. Phase 2 moved the authority to `https://sso.pjx.test`, so this can
 > now be `true` — provided the container trusts the mkcert CA (Phase 2 step 5c).
 > If token validation starts failing after flipping it, that is the CA trust
 > issue, not this phase.
@@ -301,9 +301,9 @@ docker compose -f docker-compose.devcontainer.yml build pjx-sso-identityserver
 dev-up.sh -b -d && status.sh
 
 # 6. Discovery document unchanged — the issuer must not have moved
-curl -s https://sso.pjx.localhost/.well-known/openid-configuration \
+curl -s https://sso.pjx.test/.well-known/openid-configuration \
   | grep -o '"issuer":"[^"]*"'
-# → "issuer":"https://sso.pjx.localhost"
+# → "issuer":"https://sso.pjx.test"
 
 # 7. A net8.0 API validating tokens from a netcoreapp3.1 issuer
 #    — this is the cross-framework boundary, and check 6 alone does not prove it

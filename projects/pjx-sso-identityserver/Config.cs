@@ -93,10 +93,13 @@ namespace IdentityServerAspNetIdentity
                     AllowedGrantTypes = GrantTypes.Code,
                     RequireClientSecret = false,
                     RequirePkce = false,
-                    RedirectUris =           { "http://localhost:3000/signin-oidc", "http://localhost:3000/dashboard", "http://localhost:3000/callback"   },
-                    PostLogoutRedirectUris = { "http://localhost:3000", "http://localhost:3000/logout/callback" },
-                    AllowedCorsOrigins =     { "http://localhost:3000" },
-
+                    RedirectUris = { "https://pjx.test/signin-oidc",
+                        "https://pjx.test/dashboard",
+                        "https://pjx.test/callback",
+                        "https://pjx.test/silentrenew" },
+                    PostLogoutRedirectUris = { "https://pjx.test",
+                                            "https://pjx.test/logout/callback" },
+                    AllowedCorsOrigins = { "https://pjx.test" },
                     AllowedScopes =
                     {
                         IdentityServerConstants.StandardScopes.OpenId,

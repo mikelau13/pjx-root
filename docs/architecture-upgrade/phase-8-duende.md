@@ -131,13 +131,13 @@ From `Config.cs` (line numbers as of Phase 2), the `pjx-web-react` client must
 keep:
 
 - `ClientId`: `pjx-web-react`
-- `RedirectUris`: `https://pjx.localhost/signin-oidc`, `/dashboard`,
+- `RedirectUris`: `https://pjx.test/signin-oidc`, `/dashboard`,
   `/callback`, `/silentrenew`
-- `PostLogoutRedirectUris`: `https://pjx.localhost`, `/logout/callback`
-- `AllowedCorsOrigins`: `https://pjx.localhost`
+- `PostLogoutRedirectUris`: `https://pjx.test`, `/logout/callback`
+- `AllowedCorsOrigins`: `https://pjx.test`
 - Authorization code + PKCE (`oidc-client` 1.10.1 in the React app)
 
-**And the issuer must stay `https://sso.pjx.localhost`.** If it moves, both
+**And the issuer must stay `https://sso.pjx.test`.** If it moves, both
 `PJX_SSO__AUTHORITY` (`docker-compose.devcontainer.yml`) and
 `REACT_APP_SSO_ISSUER_URL` (`projects/pjx-web-react/.env`) have to move with it —
 and the `.env` is gitignored, so that change is easy to lose.
@@ -202,17 +202,17 @@ validate.sh test  pjx-sso-identityserver
 dev-up.sh -b -d && status.sh
 
 # 5. Issuer unchanged — the single most important check
-curl -s https://sso.pjx.localhost/.well-known/openid-configuration \
+curl -s https://sso.pjx.test/.well-known/openid-configuration \
   | grep -o '"issuer":"[^"]*"'
-# → "issuer":"https://sso.pjx.localhost"
+# → "issuer":"https://sso.pjx.test"
 
 # 6. Client registration survived
-curl -s https://sso.pjx.localhost/.well-known/openid-configuration \
+curl -s https://sso.pjx.test/.well-known/openid-configuration \
   | grep -o '"grant_types_supported":\[[^]]*\]'
 
 # 7. SSO now reports telemetry
 curl -s -u admin:admin \
-  'https://grafana.pjx.localhost/api/datasources/proxy/uid/tempo/api/search/tag/service.name/values' \
+  'https://grafana.pjx.test/api/datasources/proxy/uid/tempo/api/search/tag/service.name/values' \
   | grep pjx-sso
 ```
 
