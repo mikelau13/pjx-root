@@ -62,7 +62,7 @@ Add three **variables** (not secrets — none of these are sensitive):
 
 ## Step 2 — Promote GHCR → ACR
 
-Phase 7 builds to GHCR. AKS pulls from ACR via managed identity. Promotion
+Phase 7c builds to GHCR. AKS pulls from ACR via managed identity. Promotion
 copies the image rather than rebuilding it, so the artifact deployed is byte-for-byte
 the artifact tested.
 

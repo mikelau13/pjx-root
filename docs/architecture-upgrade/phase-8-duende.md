@@ -40,7 +40,7 @@ What makes it stop being reasonable:
 | **Making the demo public** | `mcr.microsoft.com/dotnet/aspnet:3.1` left support in December 2022, on Debian 10 (past LTS). Unpatched runtime *and* base OS, reachable from the internet. The Phase 9 IP allowlist is what defers this |
 | **A new advisory** against IS4 or its transitive dependencies | It will never be fixed — 4.1.2 is the final release |
 | **Wanting SSO telemetry** | Current OpenTelemetry packages target `net6.0`+, so the auth hop stays dark in Grafana ([Phase 5](phase-5-otel.md)) |
-| **CI scanning noise** | Phase 7's GHCR/Dependabot scanning flags the 3.1 image on every run, permanently |
+| **CI scanning noise** | Phase 7c's GHCR/Dependabot scanning flags the 3.1 image on every run, permanently |
 
 Re-run this whenever you want a current read on the first two:
 

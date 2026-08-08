@@ -7,15 +7,46 @@ devcontainer image carrying the Kubernetes/Helm toolchain.
 
 ## Progress
 
-| Phase | Status |
-|---|---|
-| 0 — Foundation | ✅ **Done** (merged, PR #15). Nine defects; see [Step 3b](phase-0-foundation.md#step-3b--nine-defects-found-during-execution) |
-| 1 — Script layer | 🔨 in progress |
-| 2–11, 8 | not started |
+Numbers reflect the order phases were written; the **Order** column is the order
+to execute them in.
 
-Phase 0 absorbed part of Phase 6 out of necessity — the `universal:2-linux` base
-image had to be replaced before Docker could work inside the container at all.
-Phase 6 is correspondingly smaller; see the note at the top of its doc.
+| Order | Phase | Status |
+|---|---|---|
+| 1 | [0 — Foundation](phase-0-foundation.md) | ✅ merged (PR #15). Nine defects — see [Step 3b](phase-0-foundation.md#step-3b--nine-defects-found-during-execution) |
+| 2 | [1 — Script layer](phase-1-script-layer.md) | ✅ committed |
+| 3 | [2 — Traefik, TLS, OIDC](phase-2-traefik.md) | ✅ committed |
+| 4 | [3 — Grafana LGTM](phase-3-observability.md) | ✅ committed |
+| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ✅ committed |
+| 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ← **next** |
+| 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | |
+| 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | |
+| 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | |
+| 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | |
+| 11 | [10 — Make the app deployable](phase-10-deployable.md) | |
+| 12 | [9 — Azure foundation](phase-9-azure-foundation.md) | first Azure spend |
+| 13 | [11 — AKS deploy + CD](phase-11-deploy.md) | |
+| 14 | [8 — Duende, then go public](phase-8-duende.md) | optional |
+
+Phases 1–4 are **stacked branches** — each was cut from the previous, so
+`feature/arch-phase-4-dotnet8` contains all four. Merging that one branch brings
+them all to `master`.
+
+### Changes to the original plan
+
+- **Phase 0 absorbed part of Phase 6.** `universal:2-linux` had to be replaced
+  before Docker worked inside the container at all, so the base-image swap
+  happened early. Phase 6 is correspondingly smaller.
+- **Phase 7 was split into 7 / 7b / 7c**, with a local Kubernetes deploy inserted
+  between chart cleanup and CI. CI automates publishing, so the artifacts should
+  be proven first — and a k3d cluster proves them for free, rather than making a
+  paid AKS cluster the place you learn Kubernetes.
+- **Health endpoints moved from Phase 10 to
+  [Phase 5 Step 5d](phase-5-otel.md#step-5d--health-checks).** They belong with
+  the OTel edits to the same startup files, they give Docker Compose real
+  `healthcheck:` blocks immediately, and Phase 7b's probes need them to exist.
+- **Phase 8 runs last** — the demo is IP-restricted, so the unpatched
+  `netcoreapp3.1` SSO container is not internet-facing and the auth migration is
+  not a prerequisite for deploying.
 
 ## How this plan is meant to be used
 
@@ -57,7 +88,7 @@ Phase 1 onward if not fixed first, which is why Phase 0 exists.
 | 4 | `projects/` is tracked in git (388 files), but README says it is gitignored | `README.md:104` | Docs contradict reality; affects the submodule decision |
 | 5 | All 8 `.csproj` target `netcoreapp3.1` (out of support since Dec 2022) | `projects/pjx-api-dotnet/`, `projects/pjx-sso-identityserver/` | Blocks OpenTelemetry on .NET services |
 | 6 | SSO server and .NET API both depend on `IdentityServer4` 4.0.x (archived Nov 2022) | `IdentityServerAspNetIdentity.csproj:13`, `pjx-api-dotnet.csproj:23` | No .NET 8 path without replacing the auth stack |
-| 7 | No CI/CD. One stray `Jenkinsfile` in `pjx-api-node` | — | Phase 7 is greenfield |
+| 7 | No CI/CD. One stray `Jenkinsfile` in `pjx-api-node` | — | Phase 7c is greenfield |
 | 8 | Compose sets `REACT_APP_GRAPHQL_URI` / `_API_URI` / `_SSO_URI`, but the app reads `REACT_APP_GRAPHQL_ENDPOINT` / `_API_DOTNET_URL` / `_SSO_ISSUER_URL` from a gitignored `.env` | `docker-compose.devcontainer.yml:81-83` vs `src/utils/authConst.tsx` | Three dead env vars; real config is untracked with no `.env.example` |
 | 9 | `kubernetes/` and `helm-pjx/templates/` are the same 10-file set — one templated, one not | both dirs | Duplicate manifests that will drift |
 | 10 | All 6 Helm templates hardcode image tags; `values.yaml` has no image keys. Every service is both `NodePort` **and** behind an Ingress, whose ports 82/83 do not exist | `helm-pjx/` | Shipping a version means editing templates; two conflicting routing paths |
@@ -93,12 +124,31 @@ for the TLS store. The directory layout stays `local/central-router/` so it
 remains recognisable against the reference, and a second tier can be added
 later if pjx ever splits into multiple stacks.
 
-### Port collision warning
+### Port collision warning — three things want 80/443
 
-pjx's Traefik will claim host ports 80, 443, and 9090 — exactly what
-CloudDevEnvironment's `central-router` claims. **The two environments cannot run
-at the same time.** Stop one before starting the other. This is called out again
-in Phase 2.
+Only **one** of these can run at a time. Stop one before starting the next.
+
+| Stack | Claims | Stop it with |
+|---|---|---|
+| pjx Compose Traefik | 80, 443, 9090 | `docker compose -f local/docker-compose.yml down` |
+| **pjx k3d cluster** ([Phase 7b](phase-7b-local-k8s.md)) | 80, 443 | `k3d cluster stop pjx` |
+| CloudDevEnvironment `central-router` | 80, 443, 9090 | `docker compose -f local/docker-compose.yml down` in *that* repo |
+
+Two traps, both of which have already cost time on this project:
+
+- **CloudDevEnvironment's `proxy.sh` leaves a host `simpleproxy` process** holding
+  `:80` long after its containers stop. `docker ps` shows nothing.
+  `ps -eo pid,etime,args | grep '[s]impleproxy'` finds it.
+- **Docker starts Traefik even when port publishing fails**, so you get a
+  container reporting `Up` with an **empty PORTS column**, no logs, and a working
+  internal API. An empty PORTS column on a container that declares `ports:` is
+  always a failure.
+
+Before starting anything that wants those ports:
+
+```bash
+ss -tln | grep -E ':(80|443) ' || echo "80/443 free"
+```
 
 ## Decisions to lock before Phase 1
 
@@ -138,7 +188,7 @@ migration (seven projects, no auth work) instead of two intertwined ones.
    `netcoreapp3.1`, but pinning to them is worse than the gap.
 2. **Frozen base image.** `mcr.microsoft.com/dotnet/aspnet:3.1` left support in
    December 2022, on Debian 10 (past LTS). Fine on localhost; not fine published.
-   Phase 7's CI scanning will flag it on every run.
+   Phase 7c's CI scanning will flag it on every run.
 3. **Toolchain check.** The .NET 8 SDK should build `netcoreapp3.1` with warning
    NETSDK1138. Phase 4 step 1 verifies this; if it fails, SSO builds via Docker
    only and is excluded from `validate.sh`.

@@ -235,6 +235,103 @@ spans from 5a and 5b already cover the request path end to end.
 
 ---
 
+## Step 5d — Health checks
+
+Grouped here because it edits the same startup code as the OTel work — same
+files, same rebuild. Moved forward from Phase 10, where it was blocking a local
+Kubernetes deploy for no good reason.
+
+### What already exists
+
+| Service | Endpoint | State |
+|---|---|---|
+| `pjx-api-node` | `/healthcheck` | ✅ exists |
+| `pjx-graphql-apollo` | `/.well-known/apollo/server-health` | ✅ built into Apollo Server 2 |
+| `pjx-api-dotnet` | `/api/calendar/event/healthcheck` | ⚠️ returns a hardcoded `"okay"` |
+| `pjx-web-react` | `/` via nginx | adequate |
+| `pjx-sso-identityserver` | — | ❌ none |
+
+So endpoints are mostly present; what is missing is anything *using* them.
+
+### Register framework health checks in both .NET services
+
+The existing `EventController.HealthCheck()` returns a constant — it cannot tell
+you the database is unreachable. `AddHealthChecks` can, and it exists on
+`netcoreapp3.1` as well, so the SSO server is **not** blocked by Decision D2.
+
+```csharp
+services.AddHealthChecks()
+        .AddDbContextCheck<CalendarDbContext>("database");
+```
+
+```csharp
+app.UseEndpoints(endpoints =>
+{
+    // Liveness runs NO checks — it answers only "is the process up?".
+    endpoints.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+    // Readiness includes dependency checks.
+    endpoints.MapHealthChecks("/health/ready");
+    // ...existing endpoint registrations
+});
+```
+
+> **Keep liveness and readiness separate, and keep dependency checks out of
+> liveness.** A liveness probe that fails because the database blinked will
+> restart a perfectly healthy pod, turning a brief outage into a crash loop.
+> Readiness is where "can I serve traffic?" belongs — Kubernetes removes the pod
+> from the Service instead of killing it.
+
+For `pjx-sso-identityserver`, register the same pair without the
+`AddDbContextCheck` (or with its own context if you want the user store covered).
+
+### Add `healthcheck:` to compose
+
+Independent of Kubernetes, and immediately useful:
+
+```yaml
+  pjx-api-node:
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+```
+
+Do the same for the other four, using each service's own endpoint and container
+port. This gives `docker ps` a real `(healthy)` / `(starting)` / `(unhealthy)`
+column — which is exactly what would have explained the "Up 4 minutes but
+returning 000" confusion during Phase 4: the containers were still starting, and
+Docker would have said so.
+
+### Point `status.sh` at the health endpoints
+
+In `local/scripts/lib/common.sh`, replace the ad-hoc URLs:
+
+```bash
+SERVICE_HEALTH=(
+    "React Web|pjx-web-react-dev|http://pjx-web-react:3000"
+    "GraphQL|pjx-graphql-apollo-dev|http://pjx-graphql-apollo:4000/.well-known/apollo/server-health"
+    ".NET API|pjx-api-dotnet-dev|http://pjx-api-dotnet:80/health/ready"
+    "Node API|pjx-api-node-dev|http://pjx-api-node:8081/healthcheck"
+    "SSO|pjx-sso-identityserver-dev|http://pjx-sso-identityserver:80/health/ready"
+    "Grafana|pjx-grafana-otel|http://grafana-otel:3000/api/health"
+)
+```
+
+`/health/ready` on the .NET API replaces `/swagger`, which returned a 302 and told
+you nothing about whether the app could actually serve requests.
+
+### Why now rather than in Phase 10
+
+[Phase 7b](phase-7b-local-k8s.md) deploys to a local cluster, and its Helm
+templates declare probes. Declaring probes against endpoints that do not exist
+yet means debugging restart loops on your first Kubernetes deploy. Doing the
+endpoints here means they are already proven under compose before Kubernetes ever
+sees them. Phase 10 keeps only resource requests and limits.
+
+---
+
 ## Step 6 — A dashboard that matches pjx
 
 Now that real telemetry exists, build the dashboard Phase 3 deliberately did not
