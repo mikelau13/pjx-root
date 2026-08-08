@@ -9,7 +9,7 @@ the cost section before running anything.
 
 **Reversible:** yes — `az group delete` removes everything.
 
-**Depends on:** Phase 7 (charts parameterised, images in GHCR).
+**Depends on:** [Phase 7c](phase-7c-cicd.md) (images in GHCR) and [Phase 7b](phase-7b-local-k8s.md) — the chart should already deploy successfully on a local cluster before you provision a paid one.
 
 ```bash
 git checkout -b feature/arch-phase-9-azure-foundation

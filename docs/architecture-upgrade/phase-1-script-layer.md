@@ -607,7 +607,7 @@ list from compose.
 Later phases add their own touchpoints: Traefik labels and a `--add-host` entry
 ([Phase 2](phase-2-traefik.md)), `OTEL_SERVICE_NAME`
 ([Phase 5](phase-5-otel.md)), a Helm template plus a CI matrix entry
-([Phase 7](phase-7-cicd.md)), probes and resource requests
+([Phase 7c](phase-7c-cicd.md)), probes ([Phase 7b](phase-7b-local-k8s.md)) and resource requests
 ([Phase 10](phase-10-deployable.md)).
 
 ---

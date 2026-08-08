@@ -331,47 +331,37 @@ sensitive to the Node version (see Phase 6).
 
 ---
 
-## Step 4 — Health endpoints and probes
+## Step 4 — Health endpoints — **moved to Phase 5**
 
-There are no health endpoints. Add them.
+> The endpoints now live in
+> [Phase 5 Step 5d](phase-5-otel.md#step-5d--health-checks), and the Kubernetes
+> probe declarations in [Phase 7b](phase-7b-local-k8s.md). Both are done before
+> this phase.
+>
+> Moved because declaring probes against endpoints that do not exist yet means
+> debugging restart loops on a first Kubernetes deploy — and because the endpoint
+> work belongs with the OTel edits to the same startup files. It also gives
+> Docker Compose real `healthcheck:` blocks, which is useful long before
+> Kubernetes.
 
-**.NET** — `Startup.cs` / `Program.cs`:
-
-```csharp
-services.AddHealthChecks()
-    .AddDbContextCheck<PjxContext>(name: "database");
-// ...
-app.UseEndpoints(e => { e.MapHealthChecks("/health"); /* ... */ });
-```
-
-Consider splitting `/health/live` (process is up) from `/health/ready`
-(dependencies reachable). A liveness probe that fails when the *database* is
-briefly unavailable will restart a perfectly healthy pod and make an outage
-worse.
-
-**Node** (`pjx-api-node`, `pjx-graphql-apollo`) — a route returning 200.
-Apollo Server also answers `GET /.well-known/apollo/server-health`.
-
-**React** — nginx serving static files; `/` is a sufficient probe target.
-
-Then in every deployment template:
+Nothing to do here beyond confirming the AKS values file keeps the probe timings
+generous enough for a cold start on a small node:
 
 ```yaml
         readinessProbe:
           httpGet: { path: /health/ready, port: 80 }
           initialDelaySeconds: 10
-          periodSeconds: 10
         livenessProbe:
           httpGet: { path: /health/live, port: 80 }
           initialDelaySeconds: 30
-          periodSeconds: 20
           failureThreshold: 3
 ```
 
 > On a single `B2ms` node, .NET cold start can exceed 30 seconds under
 > contention. If pods restart-loop on first deploy, raise
 > `initialDelaySeconds` before assuming the app is broken — or use a
-> `startupProbe`, which exists precisely for slow-starting containers.
+> `startupProbe`, which exists precisely for slow-starting containers. Timings
+> that were fine on k3d locally may be too tight on a contended AKS node.
 
 ---
 
