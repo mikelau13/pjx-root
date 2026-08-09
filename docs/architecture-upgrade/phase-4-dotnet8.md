@@ -436,6 +436,60 @@ Then upgrade one project at a time, `dotnet build` and `dotnet test` after each,
 and exercise `/country/all` and `/cities` in the browser. Those two endpoints are
 the LINQ-heavy paths.
 
+### It is now blocking, not merely stale
+
+**2026-08-09.** Adding
+`Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` **8.0.28** to
+`Pjx_Api` for Phase 5 Step 5d took the whole API's database layer down. NuGet
+resolved the graph to:
+
+| Package | Version |
+|---|---|
+| `Microsoft.EntityFrameworkCore` | 8.0.28 ← pulled in by the health-check package |
+| `Microsoft.EntityFrameworkCore.Relational` | 8.0.28 ← same |
+| `Microsoft.EntityFrameworkCore.Sqlite` | 3.1.7 ← left behind |
+
+The Sqlite provider is compiled against EF Core 3.1's abstract members and does
+not implement EF Core 8's, so the first thing to build a query threw:
+
+```
+System.TypeLoadException: Method 'Create' in type
+'Microsoft.EntityFrameworkCore.Sqlite.Query.Internal.SqliteQueryableMethodTranslatingExpressionVisitorFactory'
+from assembly 'Microsoft.EntityFrameworkCore.Sqlite, Version=3.1.7.0' does not
+have an implementation.
+```
+
+`AddDbContextCheck` calls `CanConnectAsync()`, which is merely the *first* thing to
+touch EF — every database-backed endpoint was broken too, while `/health/live`
+still answered `Healthy` because it runs no checks.
+
+**Resolved by removing the package and the `AddDbContextCheck` call from
+`Pjx_Api`**, so EF Core returns to a consistent 3.1.7. The .NET API's readiness
+probe therefore does not verify the database. SSO keeps its check — it is
+`netcoreapp3.1` with the matching 3.1.32 package, so its versions align.
+
+The lesson generalises: **any package that depends on modern EF Core will drag
+EF Core 8 into the graph and break the 3.1 Sqlite provider.** Version the
+dependency against the EF Core version in use, not the project's
+`TargetFramework`.
+
+### Where this lands in later phases
+
+| Phase | Impact |
+|---|---|
+| [5](phase-5-otel.md) | No EF spans. The .NET API's readiness check omits the database. |
+| [6](phase-6-devcontainer-image.md) | The image pins `dotnet-ef` 8.x, which cannot operate on an EF Core 3.1 project — `dotnet ef migrations` fails. |
+| [7b](phase-7b-local-k8s.md) | The .NET API's readiness probe passes without proving the database is reachable. |
+| [10](phase-10-deployable.md) | **Hard blocker.** `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.\* requires EF Core 8 — the same mismatch, but on the critical path. |
+| [8](phase-8-duende.md) | Already bumps SSO's EF Core to 8.0.x, so SSO is covered there. |
+| [11](phase-11-deploy.md) | A pod can report Ready while its database is unreachable. Acceptable for a demo, not for production. |
+
+**Recommendation: do the upgrade as Step 0 of [Phase 10](phase-10-deployable.md).**
+That phase already swaps the database provider and regenerates migrations, so the
+EF Core 8 LINQ regressions and the PostgreSQL switch get tested in one browser
+pass instead of two. Phase 6's `dotnet-ef` pin is the one item worth handling
+sooner, since it is already in the repository.
+
 ---
 
 ## Rollback
