@@ -294,8 +294,52 @@ curl -s -u admin:admin \
   | head -c 400
 ```
 
-Then in Grafana → Explore → Tempo, search `service.name = pjx-api-node`. Hit the
-service through the browser and confirm spans appear within a few seconds.
+Then in Grafana → **Explore** → datasource **Tempo**. Hit the service through the
+browser and confirm spans appear within a few seconds.
+
+> ### ⚠️ Use the TraceQL tab, not Search — the Search tab is broken
+>
+> In `grafana/otel-lgtm:0.18.1`, the **Search** tab's query builder emits TraceQL
+> **without quoting string values**, so every query fails:
+>
+> ```
+> {resource.service.name=pjx-api-node && name=GET /healthcheck}
+> Error (invalid TraceQL query: parse error at line 1, col 24: unknown identifier: pjx)
+> ```
+>
+> Column 24 is exactly where the unquoted value starts. This is not a
+> misconfiguration — Tempo 2.10.0 answers `/api/status/buildinfo` with 200, so
+> version detection is fine. The builder is simply wrong.
+>
+> Use the **TraceQL** tab and type queries by hand. The only difference is the
+> quotes:
+>
+> ```
+> {}
+> ```
+>
+> Empty braces match everything — nothing to type, nothing to quote. Best starting
+> point: run it, then click a Trace ID in the results table.
+>
+> ```
+> {resource.service.name="pjx-api-node"}
+> {resource.service.name="pjx-api-node" && name="GET /healthcheck"}
+> ```
+>
+> Paste with care — copying from rendered docs can substitute curly quotes, which
+> fails identically. Type the `"` characters if in doubt.
+>
+> ### Reading the waterfall
+>
+> Clicking a Trace ID opens one bar per span. **Indentation** is parent/child; bar
+> **length and offset** are duration and start time relative to the trace; the
+> **badge** on each row is the service name — in a cross-service trace this is
+> where it changes. Click a span for `http.method`, `http.route`,
+> `http.status_code`, `net.peer.name`. The **Service Graph** tab renders the same
+> data as a node diagram, which is quicker to read first.
+>
+> Health checks dominate the results — three services probing every 15s. Filter
+> them with `name != "GET /healthcheck"` or just scan past them.
 
 ---
 
@@ -703,6 +747,66 @@ API's token validation on `/country/all`.
 Expect a **gap where the SSO redirect happens** — that service is uninstrumented
 until Phase 8. The trace resumes once the token reaches the .NET API. That gap is
 the expected shape, not a broken trace context.
+
+---
+
+## Outstanding — no cross-service traces
+
+**Recorded 2026-08-09.** Every trace in Tempo contains exactly **one** service.
+There is no trace that spans a service boundary, which is the main thing
+distributed tracing exists to provide.
+
+The cause is a missing HTTP server span on Apollo. `POST /graphql` produces no
+span at all — the full list of span names Tempo knows contains no `POST`:
+
+```bash
+NOW=$(date +%s)
+docker exec pjx-grafana-otel sh -c "curl -s --get \
+  'http://localhost:3200/api/search/tag/name/values' \
+  --data-urlencode 'start=$((NOW-3600))' --data-urlencode 'end=${NOW}'"
+```
+
+```
+GET /.well-known/apollo/server-health   ← the health check IS traced
+GET /health/ready
+GET /healthcheck
+OPTIONS
+graphql.parse                            ← appears as a ROOT span
+graphql.parseSchema
+query IntrospectionQuery
+middleware - expressInit, query, router - /   ← express spans exist
+```
+
+So HTTP instrumentation works on Apollo for `GET`, and the GraphQL
+instrumentation works — but the `POST` that carries every real query is
+untraced. With no HTTP span active, the `graphql.*` spans become roots, and the
+outbound call to `pjx-api-node` has no parent context to propagate.
+
+`pjx-graphql-apollo` calls the Node API through `apollo-datasource-rest`
+(`src/data-sources/NodeApi.ts`, `baseURL` from `NODE_API_ENDPOINT` in that
+project's gitignored `.env`), so the Apollo → Node API hop is where the first
+cross-service trace should appear.
+
+### What to investigate when picked up
+
+Apollo Server 2 with `apollo-datasource-rest` is old enough that its request
+handling may bypass what `@opentelemetry/instrumentation-http` patches for POST
+bodies. Start by confirming whether an HTTP span exists for *any* POST to any
+service, which separates "Apollo-specific" from "POST-specific". Budget an hour
+and be willing to stop — the answer may be that this Apollo version needs
+`@apollo/server` v4 before it instruments cleanly.
+
+### Why it is deferred
+
+Nothing in Phases 6, 7, or 7b depends on cross-service traces. Per-service
+traces, all metrics, and the dashboards Phase 7b and 11 rely on all work. This
+sits with the log pipeline below: telemetry *depth*, revisited after the
+Kubernetes work.
+
+Do not confuse this with the two expected gaps —
+[SSO is uninstrumented until Phase 8](phase-8-duende.md) and
+[EF spans need EF Core 8](phase-4-dotnet8.md#it-is-now-blocking-not-merely-stale).
+Those are known and intended. This one is a defect.
 
 ---
 
