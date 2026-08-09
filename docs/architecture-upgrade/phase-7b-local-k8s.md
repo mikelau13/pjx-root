@@ -229,6 +229,21 @@ service, using each one's own path and container port:
 | `pjx-graphql-apollo` | `/.well-known/apollo/server-health` | 4000 |
 | `pjx-web-react` | `/` | 3000 |
 
+> **`pjx-api-dotnet`'s readiness does not check the database.** Its
+> `AddDbContextCheck` had to be removed —
+> [EF Core is still 3.1.7 there](phase-4-dotnet8.md#it-is-now-blocking-not-merely-stale)
+> and the health-check EF package drags in EF Core 8, which breaks the Sqlite
+> provider outright.
+>
+> Consequence for this phase: the pod reports `Ready` as soon as Kestrel answers,
+> so a `CrashLoopBackOff` caused by an unwritable SQLite path (failure mode 2
+> below) will *not* be caught by the probe — it surfaces as 500s from the
+> ingress instead. Check `kubectl logs` rather than trusting `READY 1/1`.
+>
+> `pjx-sso-identityserver` keeps its database check, so its probe is the more
+> meaningful of the two. [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql)
+> restores the API's.
+
 ---
 
 ## Step 7 — Deploy

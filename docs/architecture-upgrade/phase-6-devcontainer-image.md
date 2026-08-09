@@ -133,6 +133,47 @@ RUN dotnet tool install --global dotnet-ef --version 8.0.2
 WORKDIR /workspaces/pjx-root
 ```
 
+> ### ⚠️ `dotnet tool install` cannot run in this Dockerfile
+>
+> `dotnet` is provided by the `ghcr.io/devcontainers/features/dotnet` feature, and
+> **features are layered on after the Dockerfile build finishes**. The command
+> above fails at build time with:
+>
+> ```
+> /bin/sh: 1: dotnet: not found
+> exit code: 127
+> ```
+>
+> This bit Phase 5 for real — the same line in `.devcontainer/Dockerfile` blocked
+> every devcontainer rebuild until it was moved to `setup.sh`, which runs as
+> `postCreateCommand` and therefore after the features exist. Keep it there:
+>
+> ```bash
+> if ! dotnet tool list --global 2>/dev/null | grep -q 'dotnet-ef'; then
+>     dotnet tool install --global dotnet-ef --version 8.0.11
+> fi
+> ```
+>
+> The guard is required — a bare `install` exits non-zero when the tool is already
+> present, and `set -e` would fail the whole setup script on every rebuild.
+>
+> The same trap applies to anything else in this phase that depends on a
+> feature-provided binary. `kubectl`, `helm`, `k3d` and `k9s` are safe: they are
+> installed by `curl` into `/usr/local/bin` and depend on nothing from a feature.
+
+> ### `dotnet-ef` 8.x will not work until EF Core is upgraded
+>
+> The tool's major version must match the project's EF Core version, and
+> [`Pjx_Api` and `Pjx.CalendarLibrary` are still on EF Core 3.1.7](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded)
+> despite targeting `net8.0`. `dotnet ef migrations add` and `dotnet ef database
+> update` will fail against them.
+>
+> Nothing in Phases 6, 7, or 7b needs migrations, so this is not urgent — but do
+> not spend time debugging the tool. Either pin `dotnet-ef` to `3.1.*` to match
+> what the projects actually use, or leave it at 8.x and accept that migrations
+> wait for [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql),
+> which is where the EF Core upgrade belongs.
+
 ### One SDK, deliberately
 
 `pjx-sso-identityserver` stays on `netcoreapp3.1` (Decision D2), but this image

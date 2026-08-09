@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using NSwag;
 using NSwag.Generation.Processors.Security;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Pjx.CalendarEntity.Models;
 using Pjx.CalendarLibrary.ConflictChecks;
 using Pjx.CalendarLibrary.Repositories;
@@ -91,16 +96,38 @@ namespace Pjx_Api
             services.AddCors(options =>
             {
                 // this defines a CORS policy called "default"
-                options.AddPolicy("default", policy =>
-                {
-                    // allow Ajax calls to be made from https://localhost:3000 (pjx-web-react)
-                    policy.WithOrigins("http://localhost:3000")
-                        .AllowAnyHeader()
-                        .AllowAnyMethod();
-                });
+                  options.AddPolicy("default", policy =>
+                  {
+                      // Origins are environment-specific: https://pjx.test locally,
+                      // the public hostname in Azure. Comma-separated.
+                      var corsOrigins = (Configuration["PJX_CORS_ORIGINS"] ?? "https://pjx.test")
+                          .Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                      policy.WithOrigins(corsOrigins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                  });
             });
 
+            var otlpEndpoint = Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 
+            if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+            {
+                services.AddOpenTelemetry()
+                    .ConfigureResource(r => r.AddService(
+                        serviceName: Configuration["OTEL_SERVICE_NAME"] ?? "pjx-api-dotnet"))
+                    .WithTracing(t => t
+                        .AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation()
+                        .AddEntityFrameworkCoreInstrumentation()
+                        .AddOtlpExporter())
+                    .WithMetrics(m => m
+                        .AddAspNetCoreInstrumentation()
+                        .AddHttpClientInstrumentation()
+                        .AddOtlpExporter());
+            }
+
+            services.AddHealthChecks();
         }
 
         public void Configure(IApplicationBuilder app)
@@ -116,9 +143,12 @@ namespace Pjx_Api
 
             app.UseEndpoints(endpoints =>
             {
+                // Liveness runs NO checks — it answers only "is the process up?".
+                endpoints.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+                // Readiness includes dependency checks.
+                endpoints.MapHealthChecks("/health/ready");
                 // setup the policy for all API endpoints in the routing system
-                endpoints.MapControllers()
-                    .RequireAuthorization("ApiScope");
+                endpoints.MapControllers().RequireAuthorization("ApiScope");
             });
         }
     }

@@ -9,6 +9,7 @@ using IdentityServerAspNetIdentity.Models;
 using IdentityServerAspNetIdentity.Services;
 using IdentityServerAspNetIdentity.Services.Email;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -119,6 +120,7 @@ namespace IdentityServerAspNetIdentity
             // Email service
             services.Configure<EmailConfig>(Configuration.GetSection("Email"));
             services.AddTransient<IEmailService, EmailService>();
+            services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>("database");
         }
 
         public void Configure(IApplicationBuilder app)
@@ -150,6 +152,10 @@ namespace IdentityServerAspNetIdentity
             app.UseAuthorization();
             app.UseEndpoints(endpoints =>
             {
+                // Liveness runs NO checks — it answers only "is the process up?".
+                endpoints.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+                // Readiness includes dependency checks.
+                endpoints.MapHealthChecks("/health/ready");
                 endpoints.MapDefaultControllerRoute();
             });
         }

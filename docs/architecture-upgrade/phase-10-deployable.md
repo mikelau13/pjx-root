@@ -155,6 +155,50 @@ Local development is unaffected — the relative default still resolves.
 
 Both .NET projects. `pjx-api-node` has no datastore and needs nothing.
 
+> ### Step 0 first — upgrade EF Core to 8 in the API
+>
+> **This is a hard prerequisite, not a suggestion.** `Pjx_Api` and
+> `Pjx.CalendarLibrary` still reference EF Core **3.1.7** while targeting
+> `net8.0` — [Phase 4 left this
+> undone](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded). The
+> `Npgsql...PostgreSQL 8.0.*` below depends on EF Core 8, so installing it
+> reproduces exactly the failure Phase 5 hit:
+>
+> ```
+> System.TypeLoadException: Method 'Create' in type
+> 'Sqlite...QueryableMethodTranslatingExpressionVisitorFactory' ... does not
+> have an implementation.
+> ```
+>
+> Except here it is on the critical path — the provider swap *is* the phase.
+>
+> ```bash
+> git checkout -b feature/arch-phase-10-deployable   # EF upgrade lands here as step 0
+> ```
+>
+> Upgrade `Microsoft.EntityFrameworkCore.Sqlite`, `.Design` and `.Tools` to
+> `8.0.*` in **both** projects, one at a time, `dotnet build` and `dotnet test`
+> after each. Then exercise `/country/all` and `/cities` in the browser before
+> touching PostgreSQL — EF Core 8 translates LINQ more strictly, so queries that
+> silently ran client-side on 3.1 now throw at runtime. Finding those against a
+> database that still works is much easier than finding them mixed in with a
+> provider swap.
+>
+> Doing it here rather than earlier is deliberate: this phase already regenerates
+> migrations and re-tests all database access, so the LINQ regressions and the
+> PostgreSQL move share one verification pass.
+>
+> Two things start working again as a side effect:
+> [EF query spans in Grafana](phase-5-otel.md#step-5b--net-services-after-phase-4),
+> and `AddDbContextCheck` on the API's readiness probe — which
+> [Phase 5 had to remove](phase-4-dotnet8.md#it-is-now-blocking-not-merely-stale)
+> and which [Phase 11](phase-11-deploy.md) wants before production traffic.
+>
+> `dotnet-ef` also becomes usable: the tool is pinned to 8.x in
+> [Phase 6](phase-6-devcontainer-image.md), and it cannot operate on an EF Core
+> 3.1 project — so `dotnet ef migrations add InitialPostgres` below fails until
+> this step is done.
+
 ```bash
 cd projects/pjx-api-dotnet/src/Pjx_Api
 dotnet remove package Microsoft.EntityFrameworkCore.Sqlite

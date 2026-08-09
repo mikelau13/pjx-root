@@ -16,9 +16,9 @@ to execute them in.
 | 2 | [1 — Script layer](phase-1-script-layer.md) | ✅ committed |
 | 3 | [2 — Traefik, TLS, OIDC](phase-2-traefik.md) | ✅ committed |
 | 4 | [3 — Grafana LGTM](phase-3-observability.md) | ✅ committed |
-| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ✅ committed |
-| 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ← **next** |
-| 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | |
+| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ⚠️ committed, one step outstanding — [EF Core still 3.1.7](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) |
+| 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ⚠️ committed — traces, metrics, health checks, dashboard all verified. Three items deferred, see below |
+| 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | ← **next**. Mostly done already: only `kubectl`, `helm`, `k3d`, `k9s` remain |
 | 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | |
 | 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | |
 | 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | |
@@ -30,6 +30,33 @@ to execute them in.
 Phases 1–4 are **stacked branches** — each was cut from the previous, so
 `feature/arch-phase-4-dotnet8` contains all four. Merging that one branch brings
 them all to `master`.
+
+### Deferred work
+
+Items consciously postponed to reach local Kubernetes sooner. **Everything here
+must be closed before [Phase 10](phase-10-deployable.md)** — that is the agreed
+gate, because Phase 10 is where the app becomes genuinely deployable.
+
+| Item | From | Blocks | Close by |
+|---|---|---|---|
+| [EF Core still 3.1.7 on `net8.0`](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) | 4 | **Phase 10 hard blocker** — `Npgsql...PostgreSQL 8.0.*` needs EF Core 8 | [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql) |
+| [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before 10 |
+| [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before 10 |
+
+Three consequences of the EF Core item worth knowing while working:
+
+- `dotnet-ef` is pinned to 8.x and **cannot operate on an EF Core 3.1 project** —
+  `dotnet ef migrations` fails until the upgrade
+- `pjx-api-dotnet`'s readiness probe **does not check the database**
+  (`AddDbContextCheck` had to be removed), so in
+  [Phase 7b](phase-7b-local-k8s.md) a pod reports `Ready` without proving
+  Postgres/SQLite is reachable — read `kubectl logs`, don't trust `READY 1/1`
+- **No EF query spans** appear in Tempo
+
+Two further gaps are **intended, not deferred**: SSO stays uninstrumented until
+[Phase 8](phase-8-duende.md), and React browser telemetry
+([Step 5c](phase-5-otel.md#step-5c--react-browser-telemetry-optional)) is
+recommended skipped.
 
 ### Changes to the original plan
 
