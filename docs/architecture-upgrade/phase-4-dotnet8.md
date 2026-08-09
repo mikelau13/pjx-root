@@ -383,6 +383,61 @@ server. A green build proves nothing about that boundary.
 
 ---
 
+## Outstanding — EF Core was not upgraded
+
+**Discovered during Phase 5 Step 5b, 2026-08-08.** [Step 2](#step-2--upgrade-bottom-up)
+says to update every `Microsoft.EntityFrameworkCore.*` `PackageReference` to
+`8.0.*`. The `TargetFramework` moved to `net8.0` on all 8 projects, but five EF
+references are still on **3.1.7**:
+
+| Project | Package | Version |
+|---|---|---|
+| `Pjx_Api` | `Microsoft.EntityFrameworkCore.Design` | 3.1.7 |
+| `Pjx_Api` | `Microsoft.EntityFrameworkCore.Sqlite` | 3.1.7 |
+| `Pjx_Api` | `Microsoft.EntityFrameworkCore.Tools` | 3.1.7 |
+| `Pjx.CalendarLibrary` | `Microsoft.EntityFrameworkCore.Design` | 3.1.7 |
+| `Pjx.CalendarLibrary` | `Microsoft.EntityFrameworkCore.Sqlite` | 3.1.7 |
+
+```bash
+grep -rn 'Microsoft.EntityFrameworkCore' projects/pjx-api-dotnet --include=*.csproj
+```
+
+It builds and runs — EF Core 3.1 targets `netstandard2.0`, so `net8.0` loads it
+fine. Nothing is broken today.
+
+### Why it is deferred rather than fixed
+
+The risk is precisely the one in [Breaking changes](#breaking-changes-to-expect):
+EF Core 8 translates LINQ more strictly, so queries that currently run
+client-side start throwing at runtime rather than failing to compile. That is a
+code-correctness change, and the working decision for this upgrade is
+devcontainer-and-infrastructure first, application bugs later.
+
+### Two consequences to know about
+
+1. **No EF spans in Phase 5.** `OpenTelemetry.Instrumentation.EntityFrameworkCore`
+   hooks EF Core's `DiagnosticSource` events and its supported floor is far above
+   3.1, so database spans will likely be absent from traces. That is this version
+   gap, not a misconfiguration — see
+   [Phase 5 Step 5b](phase-5-otel.md#step-5b--net-services-after-phase-4).
+2. **EF Core 3.1 is out of support** (December 2022), same as the pre-upgrade
+   `netcoreapp3.1` runtime was. It is a genuine pre-production item, not
+   housekeeping — carry it into the [Phase 8](phase-8-duende.md) revisit alongside
+   the IdentityServer4 replacement.
+
+Do this on its own branch, not folded into another phase — the whole point is that
+a query regression should be attributable:
+
+```bash
+git checkout -b fix/ef-core-8
+```
+
+Then upgrade one project at a time, `dotnet build` and `dotnet test` after each,
+and exercise `/country/all` and `/cities` in the browser. Those two endpoints are
+the LINQ-heavy paths.
+
+---
+
 ## Rollback
 
 ```bash

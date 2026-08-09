@@ -58,6 +58,17 @@ for proj in pjx-api-dotnet pjx-sso-identityserver; do
     (cd "${dir}" && dotnet restore "$(basename "${target}")")
 done
 
+# EF Core CLI. Installed here, not in the Dockerfile: `dotnet` comes from the
+# dotnet devcontainer feature, and features are layered on AFTER the Dockerfile
+# build — so `dotnet` does not exist at image-build time (exit 127).
+# Guarded because postCreateCommand may be re-run by hand.
+if ! dotnet tool list --global 2>/dev/null | grep -q 'dotnet-ef'; then
+    echo "==> installing dotnet-ef"
+    dotnet tool install --global dotnet-ef --version 8.0.11
+else
+    echo "dotnet-ef already installed"
+fi
+
 # Put the developer scripts on PATH for interactive shells.
 PROFILE_LINE='export PATH="$PATH:/workspaces/pjx-root/local/scripts"'
 if ! grep -qF "${PROFILE_LINE}" "${HOME}/.bashrc" 2>/dev/null; then

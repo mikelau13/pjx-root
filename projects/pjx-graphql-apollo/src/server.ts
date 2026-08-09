@@ -1,4 +1,4 @@
-
+import './telemetry';
 import 'dotenv/config';
 import { ApolloServer, gql, IResolvers } from 'apollo-server';
 import { CACHE_TIMES } from './constants';

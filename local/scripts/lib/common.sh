@@ -31,9 +31,9 @@ fi
 SERVICE_HEALTH=(
     "React Web|pjx-web-react-dev|http://pjx-web-react:3000"
     "GraphQL|pjx-graphql-apollo-dev|http://pjx-graphql-apollo:4000/.well-known/apollo/server-health"
-    ".NET API|pjx-api-dotnet-dev|http://pjx-api-dotnet:80/swagger"
-    "Node API|pjx-api-node-dev|http://pjx-api-node:8081"
-    "SSO|pjx-sso-identityserver-dev|http://pjx-sso-identityserver:80"
+    ".NET API|pjx-api-dotnet-dev|http://pjx-api-dotnet:80/health/ready"
+    "Node API|pjx-api-node-dev|http://pjx-api-node:8081/healthcheck"
+    "SSO|pjx-sso-identityserver-dev|http://pjx-sso-identityserver:80/health/ready"
     # Service name + container port, consistent with the other rows — status.sh
     # runs inside the devcontainer on pjx-network. Using the Traefik hostname
     # would work too but adds a dependency on the router and CA trust.

@@ -46,9 +46,18 @@ services:
       - pjx-network
     environment:
       - *otel-endpoint
+      - OTEL_SERVICE_NAME=pjx-graphql-apollo
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/.well-known/apollo/server-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
   pjx-api-dotnet:
     labels:
@@ -75,13 +84,22 @@ services:
       - pjx-network
     environment:
       - *otel-endpoint
+      - OTEL_SERVICE_NAME=pjx-api-dotnet
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - PJX_SSO__AUTHORITY=https://sso.pjx.test
     working_dir: /app/src/Pjx_Api
     command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
     extra_hosts:
-        - "sso.pjx.test:host-gateway"
+      - "sso.pjx.test:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health/ready"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
   pjx-api-node:
     labels:
@@ -105,9 +123,18 @@ services:
       - pjx-network
     environment:
       - *otel-endpoint
+      - OTEL_SERVICE_NAME=pjx-api-node
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
     command: npm start
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
   pjx-web-react:
     labels:
@@ -131,6 +158,9 @@ services:
       - pjx-network
     environment:
       - *otel-endpoint
+      - OTEL_SERVICE_NAME=pjx-web-react
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - CHOKIDAR_USEPOLLING=true
       - DANGEROUSLY_DISABLE_HOST_CHECK=true
       - WDS_SOCKET_HOST=pjx.test
@@ -138,6 +168,12 @@ services:
     stdin_open: true
     tty: true
     command: npm start
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
   pjx-sso-identityserver:
     labels:
@@ -160,12 +196,21 @@ services:
       - pjx-network
     environment:
       - *otel-endpoint
+      - OTEL_SERVICE_NAME=pjx-sso-identityserver
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:443;http://+:80
       - ASPNETCORE_Kestrel__Certificates__Default__Password=password
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__PASSWORD=password
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/health/ready"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
 networks:
   pjx-network:

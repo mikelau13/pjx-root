@@ -16,8 +16,8 @@ to execute them in.
 | 2 | [1 — Script layer](phase-1-script-layer.md) | ✅ committed |
 | 3 | [2 — Traefik, TLS, OIDC](phase-2-traefik.md) | ✅ committed |
 | 4 | [3 — Grafana LGTM](phase-3-observability.md) | ✅ committed |
-| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ✅ committed |
-| 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ← **next** |
+| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ⚠️ committed, one step outstanding — [EF Core still 3.1.7](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) |
+| 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | 🔄 traces + metrics + dashboard done. Outstanding: [no log pipeline](phase-5-otel.md#outstanding--no-log-pipeline), Step 5d health checks |
 | 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | |
 | 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | |
 | 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | |

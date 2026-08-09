@@ -1,3 +1,4 @@
+import './telemetry'; 
 import restify, { plugins, Request, Response, Next } from 'restify';
 import routesByMethod from './routes';
 
