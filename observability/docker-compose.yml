@@ -38,7 +38,7 @@ services:
         - "traefik.http.services.pjx-grafana.loadbalancer.server.port=3000"
         - "traefik.http.routers.pjx-grafana-http.rule=Host(`grafana.pjx.test`)"
         - "traefik.http.routers.pjx-grafana-http.entrypoints=http"
-        - "traefik.http.routers.pjx-grafana-http.middlewares=to-https"
+        - "traefik.http.routers.pjx-grafana-http.middlewares=to-https@file"
 
 volumes:
   grafana-data: 

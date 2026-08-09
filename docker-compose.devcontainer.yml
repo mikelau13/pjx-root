@@ -90,6 +90,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
       - PJX_SSO__AUTHORITY=https://sso.pjx.test
+      - PJX_CORS_ORIGINS=https://pjx.test
     working_dir: /app/src/Pjx_Api
     command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
     extra_hosts:

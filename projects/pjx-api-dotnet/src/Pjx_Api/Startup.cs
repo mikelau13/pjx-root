@@ -96,13 +96,17 @@ namespace Pjx_Api
             services.AddCors(options =>
             {
                 // this defines a CORS policy called "default"
-                options.AddPolicy("default", policy =>
-                {
-                    // allow Ajax calls to be made from https://localhost:3000 (pjx-web-react)
-                    policy.WithOrigins("http://localhost:3000")
-                        .AllowAnyHeader()
-                        .AllowAnyMethod();
-                });
+                  options.AddPolicy("default", policy =>
+                  {
+                      // Origins are environment-specific: https://pjx.test locally,
+                      // the public hostname in Azure. Comma-separated.
+                      var corsOrigins = (Configuration["PJX_CORS_ORIGINS"] ?? "https://pjx.test")
+                          .Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                      policy.WithOrigins(corsOrigins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod();
+                  });
             });
 
             var otlpEndpoint = Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];

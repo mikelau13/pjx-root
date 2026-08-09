@@ -137,7 +137,7 @@
           "tableType": "traces"
         }
       ],
-      "title": "New panel",
+      "title": "Tempo",
       "type": "timeseries"
     },
     {
@@ -448,5 +448,5 @@
   "timezone": "browser",
   "title": "PJX Overview",
   "uid": "advvjk9",
-  "version": 10
+  "version": 1
 }
