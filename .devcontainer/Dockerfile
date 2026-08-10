@@ -14,3 +14,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
     && curl -fsSL "https://github.com/FiloSottile/mkcert/releases/download/${MKCERT_VERSION}/mkcert-${MKCERT_VERSION}-linux-amd64" \
         -o /usr/local/bin/mkcert \
     && chmod +x /usr/local/bin/mkcert
+
+
+# ================== KUBERNETES TOOLCHAIN =================
+# Pinned deliberately: CDE resolves kubectl from dl.k8s.io/release/stable.txt,
+# which silently changes version between builds. k3d's k3s node image decides the
+# real cluster version anyway, so pinning kubectl costs nothing and makes the
+# image reproducible.
+#
+# All four are plain binary downloads into /usr/local/bin. Unlike `dotnet tool
+# install`, they depend on nothing provided by a devcontainer feature, so they are
+# safe at image-build time — features are layered on only after this Dockerfile
+# finishes.
+ARG KUBECTL_VERSION=v1.36.3
+ARG HELM_VERSION=v3.16.3
+ARG K9S_VERSION=v0.32.7
+ARG K3D_VERSION=v5.7.4
+
+RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl \
+    && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C /usr/local/bin --strip-components=1 linux-amd64/helm \
+    && curl -fsSL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" | tar -xz -C /usr/local/bin k9s \
+    && curl -fsSL "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64" -o /usr/local/bin/k3d \
+    && chmod +x /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/k9s /usr/local/bin/k3d
+
+
+# Azure CLI + kubelogin (+ kubectl as side effect, which already installed above). Required from Phase 9 onward.
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && az aks install-cli

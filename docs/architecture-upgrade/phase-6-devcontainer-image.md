@@ -73,8 +73,36 @@ Dockerfile with explicit versions does not.
 
 ## Step 1 — The Dockerfile
 
-Create `.devcontainer/Dockerfile`, adapted from
-`CDE:.devcontainer/Dockerfile`:
+> ### ⚠️ Read this before the snippet below — most of it is already done
+>
+> **`.devcontainer/Dockerfile` already exists.** Phase 0 created it, because
+> `universal:2-linux` had to go before Docker worked inside the container at all.
+> This step is now **"extend the existing file"**, not "create it".
+>
+> The snippet below is the original full-file design, kept for reference. Do
+> **not** paste it over what you have — it specifies
+> `mcr.microsoft.com/vscode/devcontainers/dotnet:1-8.0-jammy`, and Phase 0
+> deliberately moved to `mcr.microsoft.com/devcontainers/base:jammy`. Following it
+> literally would undo that decision and reintroduce the defects Phase 0 fixed.
+>
+> What is actually left of this phase:
+>
+> | Concern | State |
+> |---|---|
+> | Base image | ✅ done in Phase 0 |
+> | mkcert + libnss3-tools | ✅ done in Phase 2 |
+> | Node, .NET, git, gh, docker | ✅ provided by devcontainer **features** in `devcontainer.json` |
+> | `kubectl`, `helm`, `k9s`, `k3d` | ❌ **the only remaining work** |
+>
+> So Phase 6 reduces to appending one `RUN` block for the Kubernetes toolchain —
+> see [Step 1a](#step-1a--append-the-kubernetes-toolchain).
+>
+> `CDE:` prefixes below mean paths inside the **CloudDevEnvironment** reference
+> repo at `/home/mike/projects/CloudDevEnvironment` — see
+> [Reference environment](README.md#reference-environment). Unprefixed paths are
+> relative to pjx-root.
+
+For reference, the original design — adapted from `CDE:.devcontainer/Dockerfile`:
 
 ```dockerfile
 FROM mcr.microsoft.com/vscode/devcontainers/dotnet:1-8.0-jammy
@@ -132,6 +160,80 @@ RUN dotnet tool install --global dotnet-ef --version 8.0.2
 
 WORKDIR /workspaces/pjx-root
 ```
+
+---
+
+## Step 1a — Append the Kubernetes toolchain
+
+**This is the whole of Phase 6 in practice.** Append to the *existing*
+`.devcontainer/Dockerfile`, after the `mkcert` block:
+
+```dockerfile
+
+# ================== KUBERNETES TOOLCHAIN =================
+# Pinned deliberately: CDE resolves kubectl from dl.k8s.io/release/stable.txt,
+# which silently changes version between builds. k3d's k3s node image decides the
+# real cluster version anyway, so pinning kubectl costs nothing and makes the
+# image reproducible.
+#
+# All four are plain binary downloads into /usr/local/bin. Unlike `dotnet tool
+# install`, they depend on nothing provided by a devcontainer feature, so they are
+# safe at image-build time — features are layered on only after this Dockerfile
+# finishes.
+ARG KUBECTL_VERSION=v1.36.3
+ARG HELM_VERSION=v3.16.3
+ARG K9S_VERSION=v0.32.7
+ARG K3D_VERSION=v5.7.4
+
+RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+        -o /usr/local/bin/kubectl \
+    && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+        | tar -xz -C /usr/local/bin --strip-components=1 linux-amd64/helm \
+    && curl -fsSL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" \
+        | tar -xz -C /usr/local/bin k9s \
+    && curl -fsSL "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64" \
+        -o /usr/local/bin/k3d \
+    && chmod +x /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/k9s /usr/local/bin/k3d
+```
+
+Three deliberate departures from `CDE:.devcontainer/Dockerfile:30-35`:
+
+- **kubectl is pinned.** CDE curls `stable.txt`, so two builds a month apart get
+  different versions.
+- **`--strip-components=1` for helm**, instead of CDE's
+  `cp /usr/local/bin/linux-amd64/helm /usr/local/bin/helm`, which leaves a stray
+  `linux-amd64/` directory in `/usr/local/bin`.
+- **k3d added.** CDE has no k3d — it targets a real cluster.
+  [Phase 7b](phase-7b-local-k8s.md) needs it, and the version matches what that
+  phase specifies.
+
+Left out on purpose: `kubectx`/`kubens` (one cluster, little to switch between),
+`azure-cli` (large, and not needed until [Phase 9](phase-9-azure-foundation.md)),
+and CDE's Chrome/ChromeDriver block (test automation, not this phase).
+
+### Verify
+
+Rebuild the container — then **run `dev-up.sh -d`**. `shutdownAction: stopCompose`
+stops all six containers on close and `runServices: ["workspace"]` restarts only
+the workspace, so the five app services come back **stopped**. VS Code reports
+success regardless, which makes this easy to miss.
+
+```bash
+for t in kubectl helm k9s k3d; do printf '%-8s ' $t; command -v $t >/dev/null && echo ok || echo MISSING; done
+kubectl version --client --output=yaml | head -3
+helm version --short
+k3d version
+```
+
+```bash
+dev-up.sh -d && sleep 60 && status.sh
+```
+
+> `kubectl version --client` is the only one that works before a cluster exists.
+> Plain `kubectl version` tries to reach a server and appears to hang, which reads
+> as a broken install rather than an absent cluster.
+
+---
 
 > ### ⚠️ `dotnet tool install` cannot run in this Dockerfile
 >
