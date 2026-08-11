@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
     && chmod +x /usr/local/bin/mkcert
 
 
+# Azure CLI + kubelogin + kubectl. Required from Phase 9 onward.
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && az aks install-cli
+
 # ================== KUBERNETES TOOLCHAIN =================
 # Pinned deliberately: CDE resolves kubectl from dl.k8s.io/release/stable.txt,
 # which silently changes version between builds. k3d's k3s node image decides the
@@ -37,6 +40,3 @@ RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kub
     && curl -fsSL "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64" -o /usr/local/bin/k3d \
     && chmod +x /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/k9s /usr/local/bin/k3d
 
-
-# Azure CLI + kubelogin (+ kubectl as side effect, which already installed above). Required from Phase 9 onward.
-RUN curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && az aks install-cli

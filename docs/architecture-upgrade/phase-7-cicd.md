@@ -62,9 +62,63 @@ tag values at all.
 same job. The Ingress also references service ports 80/82/83, which do not match
 the ports the services actually declare.
 
-**3. `kubernetes/` and `helm-pjx/templates/` are the same 10 files** —
-byte-for-byte the same file set, one templated and one not. Two copies to keep in
-sync, and they will drift.
+**3. `kubernetes/` and `helm-pjx/templates/` have already drifted.** 11 files
+each. `NOTES.txt` is Helm-only; of the 10 shared files, **6 are byte-identical
+and 4 differ** — and the 4 that differ are exactly the 4 that were templated:
+
+```
+DIFFERS:   pjx-api-dotnet.yaml  pjx-api-node.yaml  pjx-config.yaml  pjx-web-react.yaml
+identical: pjx-graphql-apollo  pjx-sso-identityserver  pjx-dummy
+           pjx-ingress  pjx-namespace  pjx-secret
+```
+
+An earlier draft of this doc called them "byte-for-byte the same". They are not —
+the drift has already started, which argues for deleting `kubernetes/` more
+strongly, not less.
+
+**3b. Only 4 of 10 templates contain any Helm syntax at all.**
+
+```bash
+grep -rl '{{' helm-pjx/templates/
+#  → pjx-api-dotnet, pjx-api-node, pjx-config, pjx-web-react
+```
+
+`pjx-graphql-apollo`, `pjx-sso-identityserver`, `pjx-dummy`, `pjx-ingress`,
+`pjx-namespace` and `pjx-secret` are plain YAML sitting in a templates directory.
+So [Step 1](#step-1--parameterise-images) is not "swap a line in each template" —
+apollo and sso need templating built from scratch, and they have **no
+`values.yaml` keys at all**. `values.yaml` currently holds only `dotnet_api`,
+`node_api`, `react`, and `ssoUrl`.
+
+**3c. `ssoUrl` is a hidden dependency on a NodePort this phase deletes.**
+
+```yaml
+# values.yaml
+ssoUrl: http://pjx-sso-identityserver:30501
+```
+```yaml
+# templates/pjx-config.yaml — a ConfigMap consumed by pjx-api-dotnet
+sso-authority: {{ .Values.ssoUrl }}
+```
+
+That is the .NET API's OIDC authority, and it is wrong twice over: it points at
+NodePort **30501**, which [Step 2](#step-2--pick-one-routing-mechanism) removes,
+and `pjx-sso-identityserver` is not the Service name — that is `pjx-sso-service`.
+Fixed in [Step 2a](#step-2a--fix-the-sso-authority).
+
+**3d. `pjx-namespace.yaml` will collide with Phase 7b.** The chart creates
+namespace `pjx`; [Phase 7b](phase-7b-local-k8s.md) installs with
+`--namespace pjx --create-namespace`. Helm rejects a release containing a
+namespace it was also asked to create, typically with "invalid ownership
+metadata". **Delete the template** — charts conventionally do not create their own
+namespace, and `--create-namespace` is the idiomatic mechanism.
+
+**3e. `pjx-dummy.yaml` serves no purpose.** A placeholder Deployment plus
+`NodePort` 31001 with a hardcoded image. **Delete it.**
+
+```bash
+git rm helm-pjx/templates/pjx-dummy.yaml helm-pjx/templates/pjx-namespace.yaml
+```
 
 **4. Chart metadata is untouched scaffolding.** `version: 0.1.0`,
 `appVersion: "1.16.0"`, `description: A Helm chart for Kubernetes`.
@@ -98,6 +152,7 @@ In `values.yaml`:
 global:
   imageRegistry: ghcr.io/mikelau13
   imagePullPolicy: IfNotPresent
+  imageTag: ""        # overrides every per-service tag; Phase 7b sets "latest"
 
 web:
   appName: pjx-react
@@ -137,25 +192,71 @@ sso:
 ingress:
   enabled: true
   className: traefik
-  host: pjx.local
+  # Base domain. Subdomains are derived in the template: api., ql., sso., node.
+  # Matches Phase 2 — NOT pjx.local, which is reserved for mDNS.
+  host: pjx.test
+  tls:
+    enabled: false
+    secretName: ""      # Phase 7b supplies the mkcert secret
 ```
 
-> The existing keys are `dotnet_api`, `node_api`, `react`. Renaming to camelCase
-> is optional — if you do it, update every template reference in the same commit.
+> ### This is a restructure, not a rename
+>
+> The existing file has only `dotnet_api`, `node_api`, `react` (plus `ssoUrl`).
+> So this step does three things at once, and all three are required for the
+> `pjx.image` helper below to work:
+>
+> | Change | Affects |
+> |---|---|
+> | `dotnet_api` → `dotnetApi`, `node_api` → `nodeApi`, `react` → `web` | the 3 templates that already reference them |
+> | **add** `apollo:` and `sso:` — they have no keys today | `pjx-graphql-apollo.yaml`, `pjx-sso-identityserver.yaml` |
+> | **add** `global:` and per-service `image:` blocks | all 5 deployment templates |
+>
+> Do the renames and their template references **in one commit**. A half-applied
+> rename renders as an empty string rather than failing, so `helm template`
+> succeeds and you get `image: ghcr.io/mikelau13/:` — a manifest that looks
+> plausible and fails at pull time.
+>
+> `pjx-graphql-apollo.yaml` and `pjx-sso-identityserver.yaml` contain **no Helm
+> syntax at all** today (finding 3b). For those two you are adding the first
+> `{{ }}` in the file, not editing an existing expression.
 
 Add `helm-pjx/templates/_helpers.tpl`:
 
 ```
 {{/*
-Fully-qualified image reference. Falls back to .Chart.AppVersion when no
-explicit tag is set, so a chart release and its images move together.
+Fully-qualified image reference.
+
+Tag precedence: per-service image.tag → global.imageTag → .Chart.AppVersion, so a
+chart release and its images move together by default while a single --set can
+override everything.
+
+An EMPTY global.imageRegistry must emit a bare name, not a leading slash. Phase 7b
+relies on this: k3d-imported images are referenced as `pjx-root-pjx-web-react:latest`
+with no registry, and `/pjx-root-pjx-web-react:latest` is not a valid reference.
 */}}
 {{- define "pjx.image" -}}
-{{- $registry := .root.Values.global.imageRegistry -}}
-{{- $tag := .svc.image.tag | default .root.Chart.AppVersion -}}
+{{- $registry := .root.Values.global.imageRegistry | default "" -}}
+{{- $tag := .svc.image.tag | default .root.Values.global.imageTag | default .root.Chart.AppVersion -}}
+{{- if $registry -}}
 {{- printf "%s/%s:%s" $registry .svc.image.repository $tag -}}
+{{- else -}}
+{{- printf "%s:%s" .svc.image.repository $tag -}}
+{{- end -}}
 {{- end -}}
 ```
+
+> ### Both conditionals exist for [Phase 7b](phase-7b-local-k8s.md)
+>
+> Its `environments/local.yaml` sets `global.imageRegistry: ""` and
+> `global.imageTag: latest`. A naive helper — unconditional `printf "%s/%s:%s"`
+> reading only `.svc.image.tag` — breaks on both counts: it renders a leading
+> slash, and it ignores `imageTag` entirely so every image falls back to
+> `.Chart.AppVersion`.
+>
+> Neither failure is caught by `helm lint` or `helm template`; both produce
+> syntactically valid manifests that fail at pull time as `ImagePullBackOff`,
+> which reads as a missing image rather than a rendering bug.
 
 Then in each deployment template:
 
@@ -208,7 +309,7 @@ Then fix `pjx-ingress.yaml`. It currently routes three hosts
 not exist** on those services. It also has no route to the React app, which is
 the actual entry point.
 
-Rewrite as path-based routing on one host, mirroring the Phase 2 hostname layout:
+Rewrite as **host-based** routing across the five Phase 2 hostnames:
 
 ```yaml
 {{- if .Values.ingress.enabled }}
@@ -219,28 +320,123 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: {{ .Values.ingress.className }}
 spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+        - api.{{ .Values.ingress.host }}
+        - ql.{{ .Values.ingress.host }}
+        - sso.{{ .Values.ingress.host }}
+        - node.{{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
   rules:
-    - host: {{ .Values.ingress.host }}
+    - host: {{ .Values.ingress.host }}                 # pjx.test → React
       http:
         paths:
-          - path: /graphql
-            pathType: Prefix
-            backend: { service: { name: pjx-apollo-service,  port: { number: 80 } } }
-          - path: /api
-            pathType: Prefix
-            backend: { service: { name: pjx-dotnet-service,  port: { number: 80 } } }
-          - path: /auth
-            pathType: Prefix
-            backend: { service: { name: pjx-sso-service,     port: { number: 80 } } }
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-react-service,   port: { number: 80 } } }
+            backend: { service: { name: pjx-react-service, port: { number: 80 } } }
+    - host: api.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: pjx-dotnet-service, port: { number: 80 } } }
+    - host: ql.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: pjx-apollo-service, port: { number: 80 } } }
+    - host: sso.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: pjx-sso-service, port: { number: 80 } } }
+    - host: node.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: pjx-node-service, port: { number: 80 } } }
 {{- end }}
 ```
 
-> Ordering matters: the catch-all `/` must come last, or it swallows the others.
+> ### Host-based, not path-based — an earlier draft got this wrong
+>
+> That draft routed `/graphql`, `/api`, `/auth` and `/` under a single host and
+> described it as "mirroring the Phase 2 hostname layout". It does the opposite.
+>
+> `react-scripts` bakes `REACT_APP_*` into the bundle at **build** time, so the
+> deployed app issues requests to the literal `https://api.pjx.test/...` and
+> `https://sso.pjx.test`. Under path-based routing those hostnames appear nowhere
+> in the Ingress, so every API call and the whole OIDC flow fail — and
+> [Phase 7b](phase-7b-local-k8s.md)'s browser pass fails completely.
+>
+> Host-based routing also means the existing mkcert wildcard certificate covers
+> every hostname unchanged, and your `/etc/hosts` entries keep working. Same model
+> as the Compose Traefik, so Phase 7b is comparing like with like.
+>
+> Revisit only after
+> [Phase 10's runtime configuration](phase-10-deployable.md#step-3--react-runtime-configuration)
+> makes the frontend's URLs changeable at deploy time.
+
+`pjx-node-service` is included even though the browser does not call it directly —
+Apollo reaches it in-cluster over Service DNS. Routing it costs nothing and makes
+`node.pjx.test` available for debugging, exactly as under Compose.
 > Service names must match the `metadata.name` in each service template — check
 > each one, since the current names are inconsistent with the `appName` values.
+
+---
+
+## Step 2a — Fix the SSO authority
+
+Removing `NodePort` breaks `ssoUrl` (finding 3c), because it points at port 30501.
+In `values.yaml`:
+
+```yaml
+# In-cluster Service DNS. Was http://pjx-sso-identityserver:30501 — a NodePort
+# that Step 2 removes, and a hostname that is not the Service name.
+ssoUrl: http://pjx-sso-service:80
+```
+
+`pjx-config.yaml` needs no change; it already reads `{{ .Values.ssoUrl }}`.
+
+> ### ⚠️ This will likely fail issuer validation until IdentityServer pins its issuer
+>
+> `pjx-api-dotnet` validates the `iss` claim (`Startup.cs` sets `Authority` and
+> `MetadataAddress`; `ValidateIssuer` defaults to **true**, only
+> `ValidateAudience` is disabled). IdentityServer4 derives the issuer from the
+> incoming request, which Phase 2 made correct for browser traffic via
+> `UseForwardedHeaders`.
+>
+> The mismatch: tokens minted through the browser carry
+> `iss: https://sso.pjx.test`, but discovery fetched in-cluster from
+> `http://pjx-sso-service:80` advertises `issuer: http://pjx-sso-service`. The API
+> then rejects perfectly valid tokens.
+>
+> **Fix by pinning the issuer** so discovery reports the same value regardless of
+> how it is reached — in `projects/pjx-sso-identityserver/Startup.cs`:
+>
+> ```csharp
+> services.AddIdentityServer(options =>
+> {
+>     options.IssuerUri = Configuration["PJX_SSO__PUBLIC_ORIGIN"] ?? "https://sso.pjx.test";
+> })
+> ```
+>
+> With that set, in-cluster metadata fetch and browser-minted tokens agree, and
+> the URL above works purely as a reachability address.
+>
+> This is the same class of problem as Phase 2's `UseForwardedHeaders` fix —
+> IdentityServer inferring its identity from the request — so expect it to behave
+> identically: the container starts fine and only token validation fails.
+> [Phase 7b](phase-7b-local-k8s.md)'s browser pass on `/country/all` is the check
+> that catches it.
+
+---
 
 ### Resolve the `kubernetes/` duplication
 
@@ -257,7 +453,7 @@ work in it.
 
 ---
 
-## Step 5 — Per-environment values
+## Step 3 — Per-environment values
 
 ```bash
 mkdir -p helm-pjx/environments
@@ -269,7 +465,7 @@ mkdir -p helm-pjx/environments
 global:
   imagePullPolicy: Always
 ingress:
-  host: pjx.local
+  host: pjx.test
 web:
   replicas: 1
 ```
@@ -323,7 +519,22 @@ grep -oE 'name: pjx-[a-z-]+-service' /tmp/rendered.yaml | sort | uniq -c
 
 # 7. Nothing references the deleted secret template
 grep -c 'pjx-secret' /tmp/rendered.yaml        # → 0
+
+# 8. Deleted templates are really gone
+grep -cE 'pjx-dummy|kind: Namespace' /tmp/rendered.yaml   # → 0
+
+# 9. No half-applied rename — an empty image name renders as ".../:"  (see Step 1)
+grep -E 'image: .*/:|image: .*:$' /tmp/rendered.yaml || echo "no empty image refs"
+
+# 10. The SSO authority no longer points at a NodePort
+grep -A1 'sso-authority' /tmp/rendered.yaml    # → http://pjx-sso-service:80
+grep -c '30501' /tmp/rendered.yaml             # → 0
 ```
+
+Checks 9 and 10 are the two that fail silently otherwise. A half-applied rename
+renders valid YAML with an empty image name, and a stale `ssoUrl` renders a
+perfectly well-formed ConfigMap pointing at a port that no longer exists — both
+pass `helm lint`.
 
 Check 6 is worth running carefully — the existing service names are inconsistent
 with the `appName` values, so a mismatch here is likely and produces a 404 that
@@ -339,7 +550,7 @@ straight to Azure on the strength of a clean render.
 
 ```bash
 git checkout master
-git branch -D feature/arch-phase-7-cicd
+git branch -D feature/arch-phase-7-charts
 ```
 
 If a release was deployed to a cluster: `helm rollback pjx-release` or

@@ -40,6 +40,7 @@ gate, because Phase 10 is where the app becomes genuinely deployable.
 | Item | From | Blocks | Close by |
 |---|---|---|---|
 | [EF Core still 3.1.7 on `net8.0`](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) | 4 | **Phase 10 hard blocker** — `Npgsql...PostgreSQL 8.0.*` needs EF Core 8 | [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql) |
+| [`react-scripts` 3.4.3 pins the React image to EOL Node 14](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script) | 6 | **Phase 10** — `REACT_APP_*` runtime config has the same root cause | [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration) |
 | [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before 10 |
 | [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before 10 |
 
