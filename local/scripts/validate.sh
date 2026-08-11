@@ -52,7 +52,12 @@ for target in "${TARGETS[@]}"; do
     else
         case "${CMD}" in
             test)  (cd "${dir}" && npm test --if-present)      || FAILED+=("${target}") ;;
-            build) (cd "${dir}" && npm run build --if-present) || FAILED+=("${target}") ;;
+            # react-scripts 3.4.3 uses webpack 4, whose MD4 hash OpenSSL 3 removed.
+            # Node 18 here needs --openssl-legacy-provider; the production Dockerfile
+            # is on Node 14 (OpenSSL 1.1.1g) which both works without it and REJECTS
+            # it as "bad option" — so this must not move into package.json's build
+            # script. See phase-6 Step 3.
+            build) (cd "${dir}" && NODE_OPTIONS=--openssl-legacy-provider npm run build --if-present) || FAILED+=("${target}") ;;
             lint)  (cd "${dir}" && npm run lint --if-present)  || FAILED+=("${target}") ;;
             *) echo "Error: unknown command '${CMD}'." >&2; exit 1 ;;
         esac

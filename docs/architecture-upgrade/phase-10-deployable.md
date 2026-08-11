@@ -287,6 +287,26 @@ Left unaddressed, the deployed app loads and then tries to reach whatever was
 baked in at build time — `https://api.pjx.test` after Phase 2 — which does not
 resolve from a user's browser pointed at your AKS demo.
 
+> ### Also fix the Node version here — same root cause
+>
+> `projects/pjx-web-react/Dockerfile` builds on **`node:14.5.0-slim`, EOL since
+> April 2023**. It cannot move to Node 18 while `react-scripts` is on 3.4.3:
+> webpack 4 hashes with MD4, which OpenSSL 3 removed, and the
+> `--openssl-legacy-provider` escape hatch does not exist on Node 14 (`node: bad
+> option`) — so there is no single flag that satisfies both. Details in
+> [Phase 6 Step 3](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script).
+>
+> Both problems are the same dependency: `react-scripts` 3.4.3 freezes config at
+> build time **and** pins the build to an EOL runtime. Upgrading it unlocks both,
+> so do them together rather than working around each separately:
+>
+> 1. Upgrade `react-scripts` (5.x, or migrate to Vite)
+> 2. Bump `Dockerfile` to `node:18-alpine` and drop the
+>    `--openssl-legacy-provider` handling from `local/scripts/validate.sh`
+> 3. Then apply the runtime-config change below
+>
+> Doing (3) alone leaves an EOL Node building the image you ship to production.
+
 **The fix:** serve configuration as a separate file that nginx delivers and the
 bundle reads at startup.
 

@@ -1,5 +1,6 @@
 {
 	"runServices": ["workspace"],
+	"hostRequirements": { "cpus": 4, "memory": "8gb" },
 	"remoteEnv": {
 		"HOST_PROJECT_PATH": "${localWorkspaceFolder}"
 	},

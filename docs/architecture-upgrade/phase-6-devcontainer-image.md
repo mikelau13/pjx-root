@@ -73,8 +73,36 @@ Dockerfile with explicit versions does not.
 
 ## Step 1 — The Dockerfile
 
-Create `.devcontainer/Dockerfile`, adapted from
-`CDE:.devcontainer/Dockerfile`:
+> ### ⚠️ Read this before the snippet below — most of it is already done
+>
+> **`.devcontainer/Dockerfile` already exists.** Phase 0 created it, because
+> `universal:2-linux` had to go before Docker worked inside the container at all.
+> This step is now **"extend the existing file"**, not "create it".
+>
+> The snippet below is the original full-file design, kept for reference. Do
+> **not** paste it over what you have — it specifies
+> `mcr.microsoft.com/vscode/devcontainers/dotnet:1-8.0-jammy`, and Phase 0
+> deliberately moved to `mcr.microsoft.com/devcontainers/base:jammy`. Following it
+> literally would undo that decision and reintroduce the defects Phase 0 fixed.
+>
+> What is actually left of this phase:
+>
+> | Concern | State |
+> |---|---|
+> | Base image | ✅ done in Phase 0 |
+> | mkcert + libnss3-tools | ✅ done in Phase 2 |
+> | Node, .NET, git, gh, docker | ✅ provided by devcontainer **features** in `devcontainer.json` |
+> | `kubectl`, `helm`, `k9s`, `k3d` | ❌ **the only remaining work** |
+>
+> So Phase 6 reduces to appending one `RUN` block for the Kubernetes toolchain —
+> see [Step 1a](#step-1a--append-the-kubernetes-toolchain).
+>
+> `CDE:` prefixes below mean paths inside the **CloudDevEnvironment** reference
+> repo at `/home/mike/projects/CloudDevEnvironment` — see
+> [Reference environment](README.md#reference-environment). Unprefixed paths are
+> relative to pjx-root.
+
+For reference, the original design — adapted from `CDE:.devcontainer/Dockerfile`:
 
 ```dockerfile
 FROM mcr.microsoft.com/vscode/devcontainers/dotnet:1-8.0-jammy
@@ -132,6 +160,80 @@ RUN dotnet tool install --global dotnet-ef --version 8.0.2
 
 WORKDIR /workspaces/pjx-root
 ```
+
+---
+
+## Step 1a — Append the Kubernetes toolchain
+
+**This is the whole of Phase 6 in practice.** Append to the *existing*
+`.devcontainer/Dockerfile`, after the `mkcert` block:
+
+```dockerfile
+
+# ================== KUBERNETES TOOLCHAIN =================
+# Pinned deliberately: CDE resolves kubectl from dl.k8s.io/release/stable.txt,
+# which silently changes version between builds. k3d's k3s node image decides the
+# real cluster version anyway, so pinning kubectl costs nothing and makes the
+# image reproducible.
+#
+# All four are plain binary downloads into /usr/local/bin. Unlike `dotnet tool
+# install`, they depend on nothing provided by a devcontainer feature, so they are
+# safe at image-build time — features are layered on only after this Dockerfile
+# finishes.
+ARG KUBECTL_VERSION=v1.36.3
+ARG HELM_VERSION=v3.16.3
+ARG K9S_VERSION=v0.32.7
+ARG K3D_VERSION=v5.7.4
+
+RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+        -o /usr/local/bin/kubectl \
+    && curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+        | tar -xz -C /usr/local/bin --strip-components=1 linux-amd64/helm \
+    && curl -fsSL "https://github.com/derailed/k9s/releases/download/${K9S_VERSION}/k9s_Linux_amd64.tar.gz" \
+        | tar -xz -C /usr/local/bin k9s \
+    && curl -fsSL "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64" \
+        -o /usr/local/bin/k3d \
+    && chmod +x /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/k9s /usr/local/bin/k3d
+```
+
+Three deliberate departures from `CDE:.devcontainer/Dockerfile:30-35`:
+
+- **kubectl is pinned.** CDE curls `stable.txt`, so two builds a month apart get
+  different versions.
+- **`--strip-components=1` for helm**, instead of CDE's
+  `cp /usr/local/bin/linux-amd64/helm /usr/local/bin/helm`, which leaves a stray
+  `linux-amd64/` directory in `/usr/local/bin`.
+- **k3d added.** CDE has no k3d — it targets a real cluster.
+  [Phase 7b](phase-7b-local-k8s.md) needs it, and the version matches what that
+  phase specifies.
+
+Left out on purpose: `kubectx`/`kubens` (one cluster, little to switch between),
+`azure-cli` (large, and not needed until [Phase 9](phase-9-azure-foundation.md)),
+and CDE's Chrome/ChromeDriver block (test automation, not this phase).
+
+### Verify
+
+Rebuild the container — then **run `dev-up.sh -d`**. `shutdownAction: stopCompose`
+stops all six containers on close and `runServices: ["workspace"]` restarts only
+the workspace, so the five app services come back **stopped**. VS Code reports
+success regardless, which makes this easy to miss.
+
+```bash
+for t in kubectl helm k9s k3d; do printf '%-8s ' $t; command -v $t >/dev/null && echo ok || echo MISSING; done
+kubectl version --client --output=yaml | head -3
+helm version --short
+k3d version
+```
+
+```bash
+dev-up.sh -d && sleep 60 && status.sh
+```
+
+> `kubectl version --client` is the only one that works before a cluster exists.
+> Plain `kubectl version` tries to reach a server and appears to hang, which reads
+> as a broken install rather than an absent cluster.
+
+---
 
 > ### ⚠️ `dotnet tool install` cannot run in this Dockerfile
 >
@@ -234,47 +336,90 @@ needs a browser.
 > each want ports 80/443. pjx needs the browser to reach its containers, which is
 > exactly why Phase 0 chose docker-outside-of-docker.
 
-**Keep `dockerComposeFile` and `service: workspace` exactly as they are.** The
-only change here is dropping the two features whose tools the Dockerfile now
-provides:
+**Keep `dockerComposeFile` and `service: workspace` exactly as they are.**
 
-```jsonc
-"features": {
-    "ghcr.io/devcontainers/features/git:1": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
-    // removed: node (now nvm in the Dockerfile), dotnet (now the 8.0 SDK)
-},
-```
+> ### 🛑 Do NOT remove the `node` or `dotnet` features
+>
+> An earlier draft said to drop them because "the Dockerfile now provides" those
+> tools. **It does not.** That draft assumed the
+> `vscode/devcontainers/dotnet:1-8.0-jammy` base plus a hand-rolled `nvm` install —
+> neither of which exists, because Phase 0 moved to
+> `mcr.microsoft.com/devcontainers/base:jammy` and
+> [Step 1a](#step-1a--append-the-kubernetes-toolchain) adds only the Kubernetes
+> binaries.
+>
+> `base:jammy` ships neither Node nor .NET. Removing these features loses `npm`,
+> `ts-node`, `dotnet`, `dotnet-ef`, and every `npm install` / `dotnet restore` in
+> `setup.sh` — the same `dotnet: not found` that blocked a devcontainer rebuild
+> during Phase 5, except permanent.
+>
+> Keep all five features exactly as they are:
+>
+> ```jsonc
+> "features": {
+>     "ghcr.io/devcontainers/features/git:1": {},
+>     "ghcr.io/devcontainers/features/github-cli:1": {},
+>     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+>     "ghcr.io/devcontainers/features/node:1":   { "version": "18" },
+>     "ghcr.io/devcontainers/features/dotnet:1": { "version": "8.0" }
+> },
+> ```
+>
+> Hand-rolling Node and .NET into the image would only buy version pinning, which
+> the features already provide via their `version` options. It is not worth a
+> Dockerfile that can break at build time.
 
-Leave untouched: `runServices`, `containerEnv`, `workspaceFolder`,
-`remoteUser: vscode`, `forwardPorts`, `otherPortsAttributes`, and everything in
-`docker-compose.devcontainer.yml`.
+**So `devcontainer.json` needs no changes in this phase.** Both things this step
+originally asked for are already in place:
 
-> **Reconsider whether this phase is worth it at all.** Its remaining value is
-> the Kubernetes/Helm toolchain plus `azure-cli` — genuinely needed for Phase 9.
-> Hand-rolling the Node and .NET installs only buys version pinning, and the
-> features already work. A reasonable smaller Phase 6 is: add the k8s tools and
-> `azure-cli` to the existing Dockerfile, and keep the `node`/`dotnet` features.
+| Item | State |
+|---|---|
+| `ms-kubernetes-tools.vscode-kubernetes-tools` extension | ✅ already listed |
+| All five features | ✅ keep as-is |
 
-Add the k8s VS Code extension if it is not already listed:
-
-```jsonc
-"ms-kubernetes-tools.vscode-kubernetes-tools"
-```
-
-Also add `hostRequirements` as documentation of what the stack needs
+Optionally add `hostRequirements` as documentation of what the stack needs
 (CloudDevEnvironment asks for 8 CPU / 32GB; pjx is far lighter):
 
 ```jsonc
 "hostRequirements": { "cpus": 4, "memory": "8gb" }
 ```
 
+Leave untouched: `runServices`, `remoteEnv`, `workspaceFolder`,
+`remoteUser: vscode`, `forwardPorts`, `otherPortsAttributes`,
+`postCreateCommand`, `postStartCommand`, and everything in
+`docker-compose.devcontainer.yml`.
+
+> ### Where each tool comes from
+>
+> Worth internalising, because "which layer owns this tool?" is what both wrong
+> drafts of this phase got confused about — and it decides whether an install can
+> run at image-build time:
+>
+> | Tool | Provided by | Available during Dockerfile build? |
+> |---|---|---|
+> | `git`, `gh`, `docker` | features | ❌ no |
+> | `node`, `npm`, `ts-node` | `node` feature | ❌ no |
+> | `dotnet` | `dotnet` feature | ❌ no |
+> | `dotnet-ef` | `setup.sh` (`postCreateCommand`) | ❌ no — needs `dotnet` |
+> | `mkcert` | Dockerfile (`curl`) | ✅ yes |
+> | `kubectl`, `helm`, `k9s`, `k3d` | Dockerfile (`curl`) | ✅ yes |
+>
+> **Features are layered on after the Dockerfile finishes.** Anything in the
+> Dockerfile that invokes a feature-provided binary fails with exit 127. That is
+> the whole reason `dotnet-ef` lives in `setup.sh`.
+
 ---
 
 ## Step 3 — The Node version constraint
 
-**Do not casually bump `NODE_VERSION` to 20.**
+**Do not casually bump Node to 20.**
+
+> The version lives in `devcontainer.json`, not the Dockerfile — there is no
+> `NODE_VERSION` build arg to find:
+>
+> ```jsonc
+> "ghcr.io/devcontainers/features/node:1": { "version": "18" },
+> ```
 
 `projects/pjx-web-react` uses `react-scripts` 3.4.3, whose `start` script is
 already `react-scripts --openssl-legacy-provider start` — a workaround for
@@ -289,6 +434,57 @@ you bump Node:
 2. If it fails, either stay on 18 or upgrade `react-scripts` — which is its own
    project, out of scope here.
 
+### `validate.sh build pjx-web-react` fails on Node 18 — fix it in the script
+
+```
+Error: error:0308010C:digital envelope routines::unsupported
+  code: 'ERR_OSSL_EVP_UNSUPPORTED'
+```
+
+Only `start` carries the flag; `build` does not:
+
+```json
+"start": "GENERATE_SOURCEMAP=false react-scripts --openssl-legacy-provider start",
+"build": "react-scripts build",
+```
+
+**Do NOT add the flag to the `build` script.** That is the obvious fix and it
+breaks deployment:
+
+| Base | OpenSSL | `npm run build` | accepts `--openssl-legacy-provider` |
+|---|---|---|---|
+| `node:14.5.0-slim` — production `Dockerfile` | 1.1.1g | ✅ works as-is | ❌ **`node: bad option`** |
+| `node:18-alpine` — `Dockerfile.dev`, devcontainer | 3.0.16 | ❌ needs the flag | ✅ |
+
+The production image builds on Node 14, whose OpenSSL still permits MD4, so
+`build` never needed the flag. Adding it there makes Node 14 refuse to start.
+
+Set it in `local/scripts/validate.sh` instead, so only the devcontainer sees it:
+
+```bash
+# react-scripts 3.4.3 uses webpack 4, whose MD4 hash OpenSSL 3 removed. Node 18
+# here needs --openssl-legacy-provider; the production Dockerfile is on Node 14
+# (OpenSSL 1.1.1g), which works without it and REJECTS it as "bad option" — so
+# this must not move into package.json's build script.
+build) (cd "${dir}" && NODE_OPTIONS=--openssl-legacy-provider npm run build --if-present) || FAILED+=("${target}") ;;
+```
+
+Harmless for the other two Node projects — neither uses webpack.
+
+> ### This is pre-existing, not a Phase 6 regression
+>
+> `build` only ever ran on Node 14 before, where it worked. Nothing is blocked
+> today: the production image still builds, and
+> [Phase 7b](phase-7b-local-k8s.md) imports the **dev** image (`Dockerfile.dev` →
+> `npm start`, which has the flag). Only the canary check itself was broken.
+>
+> The real problem it reveals is that the production `Dockerfile` pins
+> **`node:14.5.0-slim`, EOL since April 2023** — and it cannot move to Node 18
+> while `react-scripts` is on 3.4.3. See the
+> [deferred-work table](README.md#deferred-work); it pairs with
+> [Phase 10's React runtime configuration](phase-10-deployable.md#step-3--react-runtime-configuration),
+> which is blocked by the same dependency.
+
 The other two Node services (`restify`, Apollo Server) have no such constraint.
 If you want Node 20 for them specifically, use per-service `Dockerfile.dev` base
 images rather than changing the devcontainer default.
@@ -298,27 +494,41 @@ run from the terminal; each service builds against its own `Dockerfile.dev`.
 
 ---
 
-## Step 4 — Local Kubernetes (optional)
+## Step 4 — Do not create a cluster here
 
-To actually apply `helm-pjx/`, you need a cluster. Lightest option inside a
-docker-in-docker devcontainer is `k3d`:
+> ### 🛑 This step is superseded by [Phase 7b](phase-7b-local-k8s.md)
+>
+> An earlier draft created a k3d cluster here with:
+>
+> ```bash
+> k3d cluster create pjx --port "8080:80@loadbalancer"
+> ```
+>
+> Three things wrong with that now:
+>
+> | Problem | Why |
+> |---|---|
+> | "inside a docker-in-docker devcontainer" | pjx uses docker-**outside**-of-docker. k3d creates its nodes on the **host** daemon through the mounted socket. |
+> | Unpinned `install.sh` | [Step 1a](#step-1a--append-the-kubernetes-toolchain) already installs k3d pinned to `v5.7.4`. Running the script again would silently replace it with whatever is current. |
+> | `--port "8080:80@loadbalancer"` | [Phase 7b](phase-7b-local-k8s.md#why-not-just-map-k3d-to-80808443-and-run-both) maps **80/443** deliberately. React bakes `REACT_APP_*` in at build time, so on `:8443` the SPA loads but every API call targets the wrong port. |
+>
+> Cluster creation, TLS from the existing mkcert certificate, image import, probes,
+> and the port-conflict handling all live in Phase 7b, which also depends on
+> [Phase 7](phase-7-cicd.md) having made the chart deployable. The pre-cleanup
+> chart cannot deploy anywhere, so `helm install` here would only produce failures
+> Phase 7 is already scheduled to fix.
 
-```dockerfile
-RUN curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-```
+Phase 6 ends with the toolchain installed and nothing deployed. A useful sanity
+check that needs no cluster:
 
 ```bash
-k3d cluster create pjx --port "8080:80@loadbalancer"
-kubectl cluster-info
-helm install pjx-release helm-pjx/ --dry-run --debug   # validate templates first
+helm lint helm-pjx/
+helm template pjx-release helm-pjx/ > /dev/null && echo "templates render"
 ```
 
-Chart problems will surface immediately — hardcoded image tags, `NodePort`
-services, `*.pjx.com` ingress hosts. That is Phase 7's work; a `--dry-run` here
-just confirms the templates render.
-
-**This step is optional.** Skip if you only want the toolchain for interacting
-with a remote cluster.
+Expect complaints — hardcoded image tags, `NodePort` services, `*.pjx.com`
+ingress hosts. That is [Phase 7](phase-7-cicd.md)'s work. Seeing them now just
+confirms `helm` itself works.
 
 ---
 
@@ -332,11 +542,11 @@ with a remote cluster.
 # Rebuild the container first: Ctrl+Shift+P → Dev Containers: Rebuild Container
 
 # 1. Toolchain present and pinned
-kubectl version --client
-helm version
-k9s version
-kubectx --help > /dev/null && echo "kubectx ok"
-az version --query '"azure-cli"' -o tsv      # required from Phase 9
+kubectl version --client     # → v1.36.3 (see the az overwrite warning below)
+helm version                 # → v3.16.3
+k9s version                  # → v0.32.7
+k3d version                  # → v5.7.4, and the k3s node image it defaults to
+az version --query '"azure-cli"' -o tsv      # only if you added it early
 
 # 2. Runtimes still correct
 dotnet --list-sdks     # → 8.0.x ONLY (no 3.1 — see "One SDK, deliberately")
@@ -363,6 +573,49 @@ helm template pjx-release helm-pjx/ > /dev/null && echo "templates render"
 
 Check 5 is the one that catches the mistake this phase is most likely to
 introduce.
+
+> ### `kubectx` is not installed — that is deliberate
+>
+> [Step 1a](#step-1a--append-the-kubernetes-toolchain) skips `kubectx`/`kubens`
+> (and CDE's Chrome/ChromeDriver). `kubectx: command not found` is the expected
+> result, not a failed install. There is one local cluster to switch between.
+> `kubectl config use-context` covers it.
+
+> ### ⚠️ `az aks install-cli` silently un-pins kubectl
+>
+> If you add `azure-cli` — needed from [Phase 9](phase-9-azure-foundation.md), and
+> reasonable to add early — note that `az aks install-cli` writes
+> `/usr/local/bin/kubectl` at **latest** by default, overwriting
+> `KUBECTL_VERSION`:
+>
+> ```
+> --install-location : Default: /usr/local/bin/kubectl
+> ```
+>
+> The failure is invisible: while `latest` happens to equal your pin, everything
+> looks correct. Months later a rebuild installs the pin and then replaces it, and
+> `ARG KUBECTL_VERSION` has become decoration.
+>
+> **Put the Azure block BEFORE the Kubernetes toolchain block** so the pinned
+> binaries land last and win:
+>
+> ```dockerfile
+> RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && az aks install-cli
+>
+> # ================== KUBERNETES TOOLCHAIN =================
+> ARG KUBECTL_VERSION=v1.36.3
+> ...
+> ```
+>
+> Verify which one won:
+>
+> ```bash
+> kubectl version --client   # must match KUBECTL_VERSION
+> ```
+>
+> `kubelogin` staying at latest is fine — it is an auth helper, and its version
+> does not affect cluster API compatibility. `sudo` is also unnecessary in that
+> `RUN`; the build already runs as root.
 
 ---
 
