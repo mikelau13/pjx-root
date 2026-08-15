@@ -19,7 +19,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "9090:8080"
+      # 9091, not 9090. VS Code repeatedly claims 127.0.0.1:9090 — it is a common
+      # default (Prometheus, debug adapters) and VS Code restores forwarded ports
+      # from workspace session state, so it reappears even after forwardPorts is
+      # removed from devcontainer.json. Traefik then fails to start with
+      # "failed to bind host port 0.0.0.0:9090/tcp: address already in use",
+      # which takes down ALL routing, not just the dashboard.
+      - "9091:8080"
     volumes:
       # docker provider: watch the Docker API for containers and their
       # traefik.* labels. Read-only — Traefik only needs to observe.

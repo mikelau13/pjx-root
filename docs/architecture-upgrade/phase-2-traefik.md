@@ -32,7 +32,7 @@ docker ps --filter name=central-router --format '{{.Names}}'
 
 # host processes — this is the one that bites
 ps -eo pid,etime,args | grep -i '[s]impleproxy'
-sudo ss -tlnp | grep -E ':(80|443|9090) '
+sudo ss -tlnp | grep -E ':(80|443|9091) '
 ```
 
 A leftover `simpleproxy -L 0.0.0.0:80 -R 127.0.0.1:<port>` will still be holding
@@ -90,7 +90,7 @@ forward.
 | pjx-api-node | `node.pjx.test` | 8081 |
 | pjx-sso-identityserver | `sso.pjx.test` | 80 |
 | Grafana (Phase 3) | `grafana.pjx.test` | 3000 |
-| Traefik dashboard | `localhost:9090` | 8080 |
+| Traefik dashboard | `localhost:9091` | 8080 |
 
 ### Why `.test` and not `.localhost`
 
@@ -159,7 +159,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "9090:8080"
+      - "9091:8080"
     volumes:
       # docker provider: watch the Docker API for containers and their
       # traefik.* labels. Read-only — Traefik only needs to observe.
@@ -364,7 +364,7 @@ printf '%-16s %s\n' "api.pjx" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host
 
 All five should return 2xx or 3xx. If any returns 404, Traefik did not pick up
 that service's labels — check the dashboard at
-<http://localhost:9090/dashboard/> (host browser) and fix before proceeding. Do
+<http://localhost:9091/dashboard/> (host browser) and fix before proceeding. Do
 not stack TLS on top of broken routing.
 
 > **To test from inside the devcontainer instead**, target Traefik by service name
@@ -462,7 +462,7 @@ http:
 > ```
 >
 > and HTTP returns **404** rather than a redirect. Diagnose with
-> `curl -s http://localhost:9090/api/http/routers/pjx-web-http@docker`.
+> `curl -s http://localhost:9091/api/http/routers/pjx-web-http@docker`.
 >
 > Defining it in the file provider is also the better fit: a redirect rule is
 > shared infrastructure, not a property of any one container. It lives naturally
@@ -517,7 +517,7 @@ done
 #   → 2xx/3xx; ql.pjx returns 400 (Apollo's "GET query missing" — it routed)
 
 # 5. TEN docker routers now, not five
-curl -s http://localhost:9090/api/http/routers | grep -o '"name":"[^"]*@docker"' | sort
+curl -s http://localhost:9091/api/http/routers | grep -o '"name":"[^"]*@docker"' | sort
 #   → each service has an HTTPS router AND an -http redirect router
 ```
 
@@ -657,16 +657,10 @@ The second check matters beyond convenience: [Step 5](#step-5--move-the-oidc-con
 has the .NET API validating tokens against `https://sso.pjx.test` from
 inside a container, which needs exactly this resolution path.
 
-Replace the whole `forwardPorts` / `portsAttributes` block. Only the router's
-ports need forwarding now:
+**Delete `forwardPorts` and `portsAttributes` entirely.** Keep only
+`otherPortsAttributes`:
 
 ```jsonc
-"forwardPorts": [80, 443, 9090],
-"portsAttributes": {
-  "80":  { "label": "Traefik (HTTP)",     "onAutoForward": "notify" },
-  "443": { "label": "Traefik (HTTPS)",    "onAutoForward": "notify" },
-  "9090":{ "label": "Traefik Dashboard",  "onAutoForward": "notify" }
-},
 "otherPortsAttributes": {
   // All workloads run on the host Docker daemon and are reached through
   // Traefik, so auto-forwarding app ports is unnecessary and interferes
@@ -674,6 +668,43 @@ ports need forwarding now:
   "onAutoForward": "ignore"
 },
 ```
+
+> ### 🛑 Do not list Traefik's ports in `forwardPorts` — this cost two sessions
+>
+> An earlier draft of this step said to *replace* the list with
+> `[80, 443, 9090]`, reasoning that "only the router's ports need forwarding
+> now". That is wrong on both counts, and it re-created the very bug
+> [Phase 1 Step 6b](phase-1-script-layer.md#step-6b--remove-vs-codes-port-forwarding)
+> had just removed.
+>
+> **Nothing needs forwarding.** Under docker-outside-of-docker, Traefik publishes
+> on the host itself — `localhost:9091` works from the host browser with no VS
+> Code involvement at all. Forwarding is for containers VS Code owns, which is
+> not this arrangement.
+>
+> **Forwarding actively breaks it.** VS Code binds each listed port on
+> `127.0.0.1`, and Traefik publishes on `0.0.0.0`, which includes `127.0.0.1`.
+> Traefik then fails to start:
+>
+> ```
+> failed to bind host port 0.0.0.0:9090/tcp: address already in use
+> ```
+>
+> Because one failed binding aborts the whole container, this takes down **all**
+> routing — every hostname refuses the connection, not just the dashboard.
+>
+> Two things make it hard to diagnose. `status.sh` stays green throughout, because
+> it checks service names over `pjx-network` and never traverses the host. And
+> Compose will happily *start* the container left over from a failed create,
+> reporting `Up` with `PORTS=[]` — running, healthy, publishing nothing. Use
+> `docker port pjx-traefik` (empty output is the tell) and recover with
+> `up -d --force-recreate`.
+>
+> **VS Code also restores forwarded ports from workspace session state**, so
+> deleting `forwardPorts` does not release a port it is already holding. Clear it
+> once via the **PORTS** panel → right-click → *Stop Forwarding Port*. That is why
+> the dashboard now uses **9091**: 9090 is a common default (Prometheus, debug
+> adapters) that VS Code keeps reclaiming.
 
 Then **Rebuild and Reopen in Container** — `extra_hosts` only takes effect when the container is created.
 
@@ -849,7 +880,7 @@ dead React variables (`REACT_APP_GRAPHQL_URI`, `REACT_APP_API_URI`,
 `REACT_APP_SSO_URI`) identified at the top of this document.
 
 Traefik reaches the containers over `pjx-network`, so no published ports are
-needed. Keep `9090` on the router for the dashboard.
+needed. Keep `9091` on the router for the dashboard.
 
 Then update the URLs in `local/scripts/status.sh` from `localhost:PORT` to the
 new hostnames.
@@ -860,8 +891,8 @@ new hostnames.
 
 ```bash
 # 1. Router is healthy and sees five routers
-curl -s http://localhost:9090/api/overview | head -c 200
-curl -s http://localhost:9090/api/http/routers | grep -c '"name"'   # ≥ 5
+curl -s http://localhost:9091/api/overview | head -c 200
+curl -s http://localhost:9091/api/http/routers | grep -c '"name"'   # ≥ 5
 
 # 2. HTTP redirects to HTTPS
 curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://pjx.test/

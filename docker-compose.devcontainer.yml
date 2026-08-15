@@ -20,6 +20,12 @@ services:
     volumes:
       - .:/workspaces/pjx-root:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
+      # Claude Code state (credentials + session transcripts) on a named
+      # volume, so a devcontainer rebuild does not force a re-login and lose
+      # every past session. The container's writable layer does not survive a
+      # rebuild; this does. Paired with CLAUDE_CONFIG_DIR in devcontainer.json
+      # — without that, ~/.claude.json lands OUTSIDE this mount and is lost.
+      - pjx-claude-config:/home/vscode/.claude
     command: sleep infinity
     networks:
       - pjx-network
@@ -212,6 +218,13 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
+
+volumes:
+  # Explicitly named (not project-prefixed) so it survives being reattached
+  # from a differently-named compose project. NOTE: `docker compose down -v`
+  # deletes this and takes your Claude logins and session history with it.
+  pjx-claude-config:
+    name: pjx-claude-config
 
 networks:
   pjx-network:

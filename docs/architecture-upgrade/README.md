@@ -158,7 +158,7 @@ Only **one** of these can run at a time. Stop one before starting the next.
 
 | Stack | Claims | Stop it with |
 |---|---|---|
-| pjx Compose Traefik | 80, 443, 9090 | `docker compose -f local/docker-compose.yml down` |
+| pjx Compose Traefik | 80, 443, 9091 | `docker compose -f local/docker-compose.yml down` |
 | **pjx k3d cluster** ([Phase 7b](phase-7b-local-k8s.md)) | 80, 443 | `k3d cluster stop pjx` |
 | CloudDevEnvironment `central-router` | 80, 443, 9090 | `docker compose -f local/docker-compose.yml down` in *that* repo |
 
@@ -309,7 +309,7 @@ Phases 0–2 came from getting it wrong.
 
 | Run in the **devcontainer** | Run on the **host** |
 |---|---|
-| `dev-up.sh`, `stop.sh`, `status.sh`, `validate.sh`, `obs-up.sh` | anything hitting a **published port**: `localhost:9090`, `localhost:4318` |
+| `dev-up.sh`, `stop.sh`, `status.sh`, `validate.sh`, `obs-up.sh` | anything hitting a **published port**: `localhost:9091`, `localhost:4318` |
 | `docker compose …` (needs `HOST_PROJECT_PATH`) | your **browser** |
 | `dotnet`, `npm`, `mkcert`, `git` once `safe.directory` is set | `sudo` for `/etc/hosts`, killing host processes, system trust store |
 | service-to-service HTTP: `http://pjx-web-react:3000` | `az`, `kubectl`, `helm` against Azure |
