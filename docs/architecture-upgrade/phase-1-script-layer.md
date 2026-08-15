@@ -534,8 +534,16 @@ Then **Rebuild and Reopen in Container** — that is what makes VS Code release 
 existing bindings. (To unblock without a rebuild: PORTS panel → right-click each
 port → Stop Forwarding Port.)
 
-[Phase 2](phase-2-traefik.md) adds `forwardPorts: [80, 443, 9090]` back for
-Traefik. Until then nothing needs forwarding.
+**Nothing needs forwarding, ever** — not now, and not for Traefik in
+[Phase 2](phase-2-traefik.md). Under docker-outside-of-docker every container
+publishes on the host directly, so `localhost:9091` reaches the Traefik dashboard
+with no VS Code involvement. An earlier draft re-added `[80, 443, 9090]` in
+Phase 2 and reproduced this exact bug; see the callout there.
+
+> VS Code restores forwarded ports from **workspace session state**, so deleting
+> `forwardPorts` does not release a port it is already holding — clear it once via
+> the PORTS panel. If a port keeps being reclaimed, move the service instead: the
+> Traefik dashboard sits on **9091** because VS Code repeatedly took 9090.
 
 ```bash
 ss -tlnp | grep -E ':(3000|4000|5001|5002|6001|8081) ' || echo "all free"

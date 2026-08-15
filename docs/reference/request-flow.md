@@ -23,7 +23,7 @@ flowchart LR
         browser["Browser"]
         subgraph daemon["Host Docker daemon"]
             dev["devcontainer<br/>pjx-root-workspace-1"]
-            traefik["Traefik<br/>publishes :80 :443 :9090"]
+            traefik["Traefik<br/>publishes :80 :443 :9091"]
             apps["5 app containers<br/>pjx-web-react, pjx-api-dotnet, ..."]
         end
     end
@@ -239,17 +239,17 @@ The symptom usually tells you which layer to look at:
 | `Could not resolve host` / resolves to `::1` unexpectedly | Name resolution | `getent hosts <name>`, `cat /etc/hosts`, is it a `.localhost` name? |
 | `Connection refused` / curl `000` | Transport | Is anything listening? `ss -tlnp \| grep ':443 '` — on the **right machine** |
 | Certificate error | TLS / SNI | `openssl s_client -connect host:443 -servername host -CAfile <ca>` |
-| **404 from Traefik** | Router rule | `curl -s localhost:9090/api/http/routers/<name>@docker` |
-| 502 / 503 | Service → backend | `curl -s localhost:9090/api/http/services` and check `serverStatus` |
+| **404 from Traefik** | Router rule | `curl -s localhost:9091/api/http/routers/<name>@docker` |
+| 502 / 503 | Service → backend | `curl -s localhost:9091/api/http/services` and check `serverStatus` |
 | App-level error (400, 500) | The app itself | `docker logs <container>` |
 
 Traefik's API is the fastest tool for the middle layers, because it reports
 `status` and `error` per object:
 
 ```bash
-curl -s http://localhost:9090/api/overview | python3 -m json.tool
+curl -s http://localhost:9091/api/overview | python3 -m json.tool
 
-curl -s http://localhost:9090/api/http/routers > /tmp/r.json
+curl -s http://localhost:9091/api/http/routers > /tmp/r.json
 python3 - <<'PY'
 import json
 for r in json.load(open('/tmp/r.json')):

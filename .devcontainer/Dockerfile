@@ -40,3 +40,10 @@ RUN curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kub
     && curl -fsSL "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64" -o /usr/local/bin/k3d \
     && chmod +x /usr/local/bin/kubectl /usr/local/bin/helm /usr/local/bin/k9s /usr/local/bin/k3d
 
+# Mount point for the pjx-claude-config volume. It must exist in the IMAGE and
+# be owned by vscode: Docker initialises a fresh named volume from whatever is
+# at the mount path, ownership included. Without this the volume is created
+# root:root and `claude` cannot write its own config — the same root-owned-mount
+# trap setup.sh already checks for on node_modules.
+RUN mkdir -p /home/vscode/.claude && chown vscode:vscode /home/vscode/.claude
+

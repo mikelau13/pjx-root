@@ -2,7 +2,13 @@
 	"runServices": ["workspace"],
 	"hostRequirements": { "cpus": 4, "memory": "8gb" },
 	"remoteEnv": {
-		"HOST_PROJECT_PATH": "${localWorkspaceFolder}"
+		"HOST_PROJECT_PATH": "${localWorkspaceFolder}",
+		// Pin Claude Code's whole config tree onto the pjx-claude-config
+		// volume. This directory is the default anyway, but setting the var
+		// explicitly also moves .claude.json into it — that file normally sits
+		// at ~/.claude.json, one level ABOVE the mount, and would be lost on
+		// every rebuild along with the MCP/project config it holds.
+		"CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
 	},
 	"name": "PJX Root - Multi-service Development",
 	"dockerComposeFile": "../docker-compose.devcontainer.yml",
@@ -23,6 +29,10 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
+				// Declared so a rebuild reinstalls it. It went missing once
+				// when a host-side auto-update uninstalled the container copy
+				// and failed to install the replacement.
+				"anthropic.claude-code",
 				"ms-dotnettools.csharp",
 				"ms-vscode.vscode-typescript-next",
 				"ms-vscode.vscode-json",
@@ -35,12 +45,6 @@
 				"terminal.integrated.defaultProfile.linux": "bash"
 			}
 		}
-	},
-	"forwardPorts": [80, 443, 9090],
-	"portsAttributes": {
-		"80":  { "label": "Traefik (HTTP)",     "onAutoForward": "notify" },
-		"443": { "label": "Traefik (HTTPS)",    "onAutoForward": "notify" },
-		"9090":{ "label": "Traefik Dashboard",  "onAutoForward": "notify" }
 	},
 	// With docker-outside-of-docker, app containers publish directly on the
     // host, so VS Code forwarding is redundant — and it BINDS those host ports

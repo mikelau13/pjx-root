@@ -72,6 +72,7 @@ DotnetController -down-> OAuth : "authorize"
 WebReactLogin -right-> MVC : "redirect"
 
 @enduml
+```
 </div>
 
 ![](/images/pjx-overview.svg)
@@ -120,6 +121,57 @@ migration plan this setup came from.
 
 ---
 
+## TL;DR — `make`
+
+If you only read one section, read this one.
+
+```bash
+cd ~/projects/pjx-root
+make            # list every target
+make up         # Traefik + 5 app services + Grafana
+make down       # stop everything, ~4 GB freed
+make status     # what is running, and how much memory it holds
+make urls       # the service URLs
+```
+
+`make down` **from a host terminal** — it stops the devcontainer, so from inside
+it would kill the shell running it. Run there anyway and it stops everything else
+and tells you what it skipped.
+
+**`make up` never rebuilds.** After changing a `Dockerfile`, `package.json` or
+`.csproj`, use `dev-up.sh -b -d` instead — `make up` would start the stale image
+without complaining. Everything else routine is `make up`.
+
+> `make up` is not a substitute for `dev-up.sh` so much as a superset of the
+> common case: `dev-up.sh` starts the five app services only, while Traefik and
+> Grafana live in separate Compose projects. Starting just the app services gives
+> five healthy containers, no routing, and no dashboards — a state that looks
+> fine in `status.sh` right up until the browser refuses the connection.
+
+Nothing here is destructive. Every target uses `docker compose stop`, never
+`down`, so SQLite databases, `node_modules` volumes and Grafana dashboards all
+survive. Use `local/scripts/clean.sh` only when you actually want to discard
+state.
+
+There are three separate Compose stacks, which is why a single wrapper is worth
+having:
+
+| Project | File | Contains |
+|---|---|---|
+| `pjx-root` | `docker-compose.devcontainer.yml` | devcontainer + 5 app services |
+| `pjx-otel` | `observability/docker-compose.yml` | Grafana LGTM |
+| `pjx-router` | `local/docker-compose.yml` | Traefik |
+
+The devcontainer is started by VS Code when you open the folder, so `make up`
+leaves it alone — it only starts the things VS Code will not.
+
+> **Coming back after a break:** `make up` on the host, then open the folder in
+> VS Code. First run on a new machine needs
+> [Prerequisites](#1-prerequisites-on-the-host) and
+> [TLS certificates](#3-generate-tls-certificates-first-time-only) below.
+
+---
+
 ## Running the stack
 
 Development happens inside a **VS Code Dev Container**. It runs
@@ -134,12 +186,12 @@ Add the dev hostnames to `/etc/hosts` — `.test` has no automatic resolution:
 sudo sh -c 'echo "127.0.0.1 pjx.test ql.pjx.test api.pjx.test node.pjx.test sso.pjx.test grafana.pjx.test" >> /etc/hosts'
 ```
 
-Ports **80**, **443** and **9090** must be free — Traefik claims them. If you
+Ports **80**, **443** and **9091** must be free — Traefik claims them. If you
 also use another Traefik-based environment, stop it first, and check for
 leftover host processes holding the ports:
 
 ```bash
-sudo ss -tlnp | grep -E ':(80|443|9090) '
+sudo ss -tlnp | grep -E ':(80|443|9091) '
 ```
 
 ### 2. Open in the Dev Container
@@ -166,21 +218,44 @@ their own.
 
 ### 4. Start everything
 
-From a terminal **inside the devcontainer**:
+`make up` from the host covers this. The per-stack commands, if you want one
+piece at a time from **inside the devcontainer**:
 
 ```bash
 dev-up.sh -d                                       # the five app services
 docker compose -f local/docker-compose.yml up -d   # Traefik
+obs-up.sh                                          # Grafana
 status.sh                                          # health table
 ```
 
 | Script | Does |
 |---|---|
 | `dev-up.sh [-b] [-d\|-w]` | start the stack — build / detached / watch |
-| `stop.sh` | stop containers, keep them |
+| `stop.sh` | stop the app containers, keep them |
+| `obs-up.sh` | start the Grafana LGTM stack |
 | `clean.sh` | remove containers and volumes (prompts first — destroys the SQLite databases) |
 | `status.sh` | per-service container state and HTTP health |
 | `validate.sh <test\|build\|lint> [project]` | build or test one project or all |
+
+`status.sh` and `make status` answer different questions. `status.sh` runs inside
+the devcontainer and checks each service over `pjx-network`, so it reports **HTTP
+health**. `make status` works from either side and reports **container state and
+memory** — which is what you want when the question is "is this project still
+eating my RAM?"
+
+### Stopping
+
+```bash
+make down          # host terminal — everything, including the devcontainer
+```
+
+The devcontainer is the single largest consumer (~1.7 GB) because the VS Code
+server runs inside it. If you stop only the app services, that stays resident.
+Closing the VS Code window releases it too, via `shutdownAction: stopCompose`.
+
+Stopped containers use no CPU and no memory, so `stop` is all that is needed to
+hand resources back to another project. `docker compose down` would additionally
+delete the containers, costing recreate time for no benefit.
 
 ### Service URLs
 
@@ -191,7 +266,7 @@ status.sh                                          # health table
 | .NET API | <https://api.pjx.test/swagger> |
 | Node API | <https://node.pjx.test> |
 | Identity Server | <https://sso.pjx.test> |
-| Traefik dashboard | <http://localhost:9090/dashboard/> |
+| Traefik dashboard | <http://localhost:9091/dashboard/> |
 
 Plain `http://` redirects to `https://`.
 

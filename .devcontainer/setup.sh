@@ -82,4 +82,40 @@ if ! grep -qF "${TOOLS_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
     echo "Added ~/.dotnet/tools to PATH in ~/.bashrc"
 fi
 
+# ===================== CLAUDE CODE CLI =====================
+# Installed here, not in the Dockerfile: the native installer targets $HOME,
+# and the Dockerfile builds as root — installing there would put the binary in
+# /root and leave nothing for the vscode user.
+#
+# Belt-and-braces for the volume mount point. The Dockerfile pre-creates
+# ~/.claude owned by vscode so a FRESH pjx-claude-config volume inherits that
+# ownership, but a volume created before that line existed is still root:root,
+# and Docker will not re-initialise an already-populated volume.
+if [ -d "${HOME}/.claude" ] && [ ! -w "${HOME}/.claude" ]; then
+    echo "==> fixing root-owned ~/.claude mount"
+    sudo chown -R "$(id -u):$(id -g)" "${HOME}/.claude"
+fi
+
+if ! command -v claude >/dev/null 2>&1 && [ ! -x "${HOME}/.local/bin/claude" ]; then
+    echo "==> installing Claude Code"
+    curl -fsSL https://claude.ai/install.sh | bash
+else
+    echo "Claude Code already installed"
+fi
+
+# The installer writes to ~/.local/bin, which is not on PATH in this image.
+CLAUDE_LINE='export PATH="$HOME/.local/bin:$PATH"'
+if ! grep -qF "${CLAUDE_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
+    echo "${CLAUDE_LINE}" >> "${HOME}/.bashrc"
+    echo "Added ~/.local/bin to PATH in ~/.bashrc"
+fi
+
+# remoteEnv covers VS Code terminals and the extension host, but NOT plain
+# `docker exec` shells. Set it here too so both see the same config dir.
+CLAUDE_CFG_LINE='export CLAUDE_CONFIG_DIR="$HOME/.claude"'
+if ! grep -qF "${CLAUDE_CFG_LINE}" "${HOME}/.bashrc" 2>/dev/null; then
+    echo "${CLAUDE_CFG_LINE}" >> "${HOME}/.bashrc"
+    echo "Added CLAUDE_CONFIG_DIR to ~/.bashrc"
+fi
+
 echo "Setup complete."

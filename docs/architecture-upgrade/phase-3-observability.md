@@ -245,7 +245,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://grafana.pjx.test/login   # → 
 
 # 3. Traefik registered the route
 # HOST — Traefik's dashboard is a published port
-curl -s http://localhost:9090/api/http/routers | grep -o 'pjx-grafana[^"]*'
+curl -s http://localhost:9091/api/http/routers | grep -o 'pjx-grafana[^"]*'
 
 # 4. All three datasources provisioned
 curl -s -u admin:admin https://grafana.pjx.test/api/datasources \
