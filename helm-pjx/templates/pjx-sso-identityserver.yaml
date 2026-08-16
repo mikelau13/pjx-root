@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: pjx-sso
-        image: mikelauawaremd/pjx-sso-identityserver:v0.0.1
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.sso) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 5002
         env:
@@ -38,11 +39,11 @@ kind: Service
 metadata:
   name: pjx-sso-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: pjx-sso
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30501
+      name: http

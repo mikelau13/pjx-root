@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: pjx-apollo
-        image: mikelauawaremd/pjx-graphql-apollo:v0.0.3
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.apollo) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 4000
 ---
@@ -25,11 +26,11 @@ kind: Service
 metadata:
   name: pjx-apollo-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: pjx-apollo
   ports:
     - protocol: TCP
       port: 4000
       targetPort: 4000
-      nodePort: 30400
+      name: http

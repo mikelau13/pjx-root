@@ -1,11 +1,43 @@
-dotnet_api:
+global:
+  imageRegistry: ghcr.io/mikelau13
+  imagePullPolicy: IfNotPresent
+  imageTag: ""  #override every per-service tag; Phase 7b sets "latest"
+dotnetApi:
   appName: pjx-dotnet
   replicas: 1
-node_api:
+  image:
+    repository: pjx-api-dotnet
+    tag: ""
+nodeApi:
   appName: pjx-node
   replicas: 1
-react:
+  image:
+    repository: pjx-api-node
+    tag: ""
+web:
   appName: pjx-react
   replicas: 2
+  image:
+    repository: pjx-web-react
+    tag: ""   #defaults to .Chart.AppVersion if not set
+apollo:
+  appName: pjx-apollo
+  replicas: 1
+  image:
+    repository: pjx-graphql-apollo
+    tag: ""
+sso:
+  appName: pjx-sso
+  replicas: 1
+  image:
+    repository: pjx-sso-identityserver
+    tag: ""
+ingress:
+  enabled: true
+  className: traefik
+  host: pjx.test  #subdomains drived in the template: api. ql. sso. node.
+  tls:
+    enabled: false
+    secretName: ""
 
-ssoUrl: http://pjx-sso-identityserver:30501
+ssoUrl: http://pjx-sso-service:80

@@ -90,6 +90,10 @@ You execute the steps. This document is the instruction set, not a changelog.
 - [**How a request reaches a pjx container**](../reference/request-flow.md) —
   name resolution (including the `.localhost` trap), TLS/SNI, Traefik routing,
   and the container network, with diagrams. Worth reading before Phase 2.
+- [**The Helm chart, before and after Phase 7**](../reference/helm-chart.md) —
+  what Helm actually does with `values.yaml` and `_helpers.tpl`, and diagrams of
+  the chart's routing and image resolution either side of Phase 7. Worth reading
+  before Phase 7.
 
 ## Reference environment
 

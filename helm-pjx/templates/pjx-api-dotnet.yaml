@@ -3,20 +3,21 @@ kind: Deployment
 metadata:
   name: pjx-dotnet-deployment
   labels:
-    app: {{ .Values.dotnet_api.appName}}
+    app: {{ .Values.dotnetApi.appName}}
 spec:
-  replicas: {{ .Values.dotnet_api.replicas}}
+  replicas: {{ .Values.dotnetApi.replicas}}
   selector:
     matchLabels:
-      app: {{ .Values.dotnet_api.appName}}
+      app: {{ .Values.dotnetApi.appName}}
   template:
     metadata:
       labels:
-        app: {{ .Values.dotnet_api.appName}}
+        app: {{ .Values.dotnetApi.appName}}
     spec:
       containers:
-      - name: {{ .Values.dotnet_api.appName}}
-        image: mikelauawaremd/pjx-api-dotnet:v0.0.1
+      - name: {{ .Values.dotnetApi.appName}}
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.dotnetApi) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 80
         env:
@@ -31,11 +32,11 @@ kind: Service
 metadata:
   name: pjx-dotnet-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
-    app: {{ .Values.dotnet_api.appName}}
+    app: {{ .Values.dotnetApi.appName}}
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30601
+      name: http  #adding name: http to each port lets the Ingress reference the port by name instead of number

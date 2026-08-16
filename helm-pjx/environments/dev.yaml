@@ -1,0 +1,6 @@
+global:
+  imagePullPolicy: Always
+ingress:
+  host: pjx.test
+web:
+  replicas: 1

@@ -3,21 +3,21 @@ kind: Deployment
 metadata:
   name: pjx-react-deployment
   labels:
-    app: {{ .Values.react.appName }}
+    app: {{ .Values.web.appName }}
 spec:
-  replicas: {{ .Values.react.replicas }}
+  replicas: {{ .Values.web.replicas }}
   selector:
     matchLabels:
-      app: {{ .Values.react.appName }}
+      app: {{ .Values.web.appName }}
   template:
     metadata:
       labels:
-        app: {{ .Values.react.appName }}
+        app: {{ .Values.web.appName }}
     spec:
       containers:
-      - name: {{ .Values.react.appName }}
-        image: mikelauawaremd/pjx-web-react:v0.0.6
-        imagePullPolicy: Always
+      - name: {{ .Values.web.appName }}
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.web) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 80
 
@@ -27,11 +27,11 @@ kind: Service
 metadata:
   name: pjx-react-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
-    app: {{ .Values.react.appName }}
+    app: {{ .Values.web.appName }}
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30100
+      name: http  #adding name: http to each port lets the Ingress reference the port by name instead of number
