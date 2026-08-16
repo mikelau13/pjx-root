@@ -39,11 +39,11 @@ kind: Service
 metadata:
   name: pjx-sso-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: pjx-sso
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30501
+      name: http

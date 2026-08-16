@@ -1,10 +1,33 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: pjx-ingress
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
 spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+      - {{ .Values.ingress.host }}
+      - api.{{ .Values.ingress.host }}
+      - ql.{{ .Values.ingress.host }}
+      - sso.{{ .Values.ingress.host }}
+      - node.{{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
   rules:
-  - host: api.pjx.com
+  - host: {{ .Values.ingress.host }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pjx-react-service
+            port:
+              name: http
+  - host: api.{{ .Values.ingress.host }}
     http:
       paths:
       - pathType: Prefix
@@ -13,8 +36,8 @@ spec:
           service:
             name: pjx-dotnet-service
             port: 
-              number: 80
-  - host: ql.pjx.com
+              name: http
+  - host: ql.{{ .Values.ingress.host }}
     http:
       paths:
       - pathType: Prefix
@@ -22,9 +45,9 @@ spec:
         backend:
           service:
             name: pjx-apollo-service
-            port: 
-              number: 82
-  - host: sso.pjx.com
+            port:
+              name: http 
+  - host: sso.{{ .Values.ingress.host }}
     http:
       paths:
       - pathType: Prefix
@@ -33,4 +56,15 @@ spec:
           service:
             name: pjx-sso-service
             port: 
-              number: 83
+              name: http
+  - host: node.{{ .Values.ingress.host }}
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: pjx-node-service
+            port:
+              name: http
+{{- end }}

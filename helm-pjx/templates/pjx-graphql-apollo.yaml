@@ -26,11 +26,11 @@ kind: Service
 metadata:
   name: pjx-apollo-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: pjx-apollo
   ports:
     - protocol: TCP
       port: 4000
       targetPort: 4000
-      nodePort: 30400
+      name: http

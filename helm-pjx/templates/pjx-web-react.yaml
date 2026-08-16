@@ -27,11 +27,11 @@ kind: Service
 metadata:
   name: pjx-react-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: {{ .Values.web.appName }}
   ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30100
+      name: http  #adding name: http to each port lets the Ingress reference the port by name instead of number

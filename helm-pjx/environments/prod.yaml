@@ -1,0 +1,6 @@
+global:
+  imagePullPolicy: IfNotPresent
+ingress:
+  host: pjx.example.com
+web:
+  replicas: 2

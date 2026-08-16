@@ -11,6 +11,10 @@ files.
 **Depends on:** [Phase 6](phase-6-devcontainer-image.md) (toolchain to lint and
 render charts).
 
+**Read first:** [The Helm chart, before and after Phase 7](../reference/helm-chart.md)
+— diagrams of what changes here, plus what Helm does with `values.yaml` and
+`_helpers.tpl` if that model is new.
+
 ```bash
 git checkout -b feature/arch-phase-7-charts
 ```
@@ -304,6 +308,41 @@ spec:
       name: http
 ```
 
+**`port` is not 80 everywhere.** Keep each Service's existing number — only the
+`type`, the deleted `nodePort`, and the added `name` change:
+
+| Service | `port` / `targetPort` |
+|---|---|
+| `pjx-react-service` | 80 |
+| `pjx-dotnet-service` | 80 |
+| `pjx-apollo-service` | **4000** |
+| `pjx-node-service` | **8081** |
+| `pjx-sso-service` | 80 |
+
+> ### Three things `helm template` cannot catch here
+>
+> All three render as perfectly valid YAML and fail only when a cluster sees
+> them — which means Phase 7b, after everything else has looked correct.
+>
+> **`ClusterIP` is case-sensitive.** `clusterIP` is rejected by the API server
+> with `Unsupported value: "clusterIP": supported values: "ClusterIP",
+> "ExternalName", "LoadBalancer", "NodePort"`. Helm treats it as an ordinary
+> string and says nothing.
+>
+> **A leftover `nodePort` invalidates a `ClusterIP` Service.** Delete the line;
+> changing only `type` is not enough.
+>
+> **An untemplated host survives silently.** Missing one
+> `{{ .Values.ingress.host }}` leaves a stale `*.pjx.com` rule that renders fine
+> and never matches a request. If that one is `sso`, the login redirect breaks
+> while the other four hostnames work — which reads as an auth bug.
+>
+> ```bash
+> helm template pjx-release helm-pjx/ | grep -c 'type: ClusterIP'    # → 5
+> helm template pjx-release helm-pjx/ | grep -cE 'nodePort|NodePort'  # → 0
+> helm template pjx-release helm-pjx/ | grep -c 'pjx.com'             # → 0
+> ```
+
 Then fix `pjx-ingress.yaml`. It currently routes three hosts
 (`api.pjx.com`, `ql.pjx.com`, `sso.pjx.com`) to ports 80/82/83 — and **82/83 do
 not exist** on those services. It also has no route to the React app, which is
@@ -336,31 +375,31 @@ spec:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-react-service, port: { number: 80 } } }
+            backend: { service: { name: pjx-react-service, port: { name: http } } }
     - host: api.{{ .Values.ingress.host }}
       http:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-dotnet-service, port: { number: 80 } } }
+            backend: { service: { name: pjx-dotnet-service, port: { name: http } } }
     - host: ql.{{ .Values.ingress.host }}
       http:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-apollo-service, port: { number: 80 } } }
+            backend: { service: { name: pjx-apollo-service, port: { name: http } } }
     - host: sso.{{ .Values.ingress.host }}
       http:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-sso-service, port: { number: 80 } } }
+            backend: { service: { name: pjx-sso-service, port: { name: http } } }
     - host: node.{{ .Values.ingress.host }}
       http:
         paths:
           - path: /
             pathType: Prefix
-            backend: { service: { name: pjx-node-service, port: { number: 80 } } }
+            backend: { service: { name: pjx-node-service, port: { name: http } } }
 {{- end }}
 ```
 
