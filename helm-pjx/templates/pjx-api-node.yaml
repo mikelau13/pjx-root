@@ -3,20 +3,21 @@ kind: Deployment
 metadata:
   name: pjx-node-deployment
   labels:
-    app: {{ .Values.node_api.appName }}
+    app: {{ .Values.nodeApi.appName }}
 spec:
-  replicas: {{ .Values.node_api.replicas }}
+  replicas: {{ .Values.nodeApi.replicas }}
   selector:
     matchLabels:
-      app: {{ .Values.node_api.appName }}
+      app: {{ .Values.nodeApi.appName }}
   template:
     metadata:
       labels:
-        app: {{ .Values.node_api.appName }}
+        app: {{ .Values.nodeApi.appName }}
     spec:
       containers:
-      - name: {{ .Values.node_api.appName }}
-        image: mikelauawaremd/pjx-api-node:v0.0.2
+      - name: {{ .Values.nodeApi.appName }}
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.nodeApi) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 8081
 ---
@@ -27,7 +28,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    app: {{ .Values.node_api.appName }}
+    app: {{ .Values.nodeApi.appName }}
   ports:
     - protocol: TCP
       port: 8081

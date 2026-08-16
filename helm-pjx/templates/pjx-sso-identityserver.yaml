@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
       - name: pjx-sso
-        image: mikelauawaremd/pjx-sso-identityserver:v0.0.1
+        image: {{ include "pjx.image" (dict "root" $ "svc" .Values.sso) }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 5002
         env:
