@@ -171,10 +171,27 @@ works.
 
 ```yaml
 global:
-  # Images are imported into k3s, not pulled. Always would bypass the local copy.
-  imagePullPolicy: IfNotPresent
-  imageRegistry: ""          # bare names: pjx-root-pjx-web-react:latest
+  # Empty registry → pjx.image emits a bare name, not a leading slash.
+  imageRegistry: ""
   imageTag: latest
+  # Never, not IfNotPresent: a repository typo then fails immediately with
+  # ErrImageNeverPull, instead of spending 30s trying Docker Hub and reporting
+  # ImagePullBackOff — which reads as a network problem.
+  imagePullPolicy: Never
+
+# Docker Compose prefixes built images with its PROJECT NAME, so the images in
+# your daemon are pjx-root-pjx-web-react, not pjx-web-react. Override the
+# repository here rather than in values.yaml — the prefix is an artifact of local
+# Compose builds and would be wrong for GHCR and ACR.
+#
+# SQLite is ephemeral and single-writer, so one replica each until Phase 10
+# replaces it with PostgreSQL. values.yaml sets web.replicas to 2, so that
+# override is load-bearing.
+web:       { replicas: 1, image: { repository: pjx-root-pjx-web-react } }
+apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
+nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
+dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }
+sso:       { replicas: 1, image: { repository: pjx-root-pjx-sso-identityserver } }
 
 ingress:
   enabled: true
@@ -184,22 +201,36 @@ ingress:
     enabled: true
     secretName: pjx-tls      # created in step 4, not cert-manager
 
-# SQLite is ephemeral and single-writer — one replica only until Phase 10
-# replaces it with PostgreSQL.
-web:       { replicas: 1 }
-apollo:    { replicas: 1 }
-nodeApi:   { replicas: 1 }
-dotnetApi: { replicas: 1 }
-sso:       { replicas: 1 }
-
-keyVault:
-  enabled: false             # Azure-only; secrets come from the image locally
+# The .NET API reaches SSO over in-cluster Service DNS.
+ssoUrl: http://pjx-sso-service:80
 ```
 
-`global.imageRegistry: ""` requires the `pjx.image` helper from
-[Phase 7 Step 1](phase-7-cicd.md#step-1--parameterise-images) to omit the
-registry prefix when empty — check that it does, or the name renders as
-`/pjx-root-pjx-web-react:latest` with a leading slash.
+> ### The image names are not what `values.yaml` says
+>
+> `values.yaml` declares `repository: pjx-web-react` — correct for GHCR and ACR.
+> But Compose names its builds `<project>-<service>`, so what is actually in your
+> daemon is `pjx-root-pjx-web-react`. Without the overrides above, the chart asks
+> for `pjx-web-react:latest`, Kubernetes finds nothing, and tries Docker Hub.
+>
+> Confirm the two lists correspond **before** creating the cluster — `helm
+> template` cannot check this for you, and it is the most likely thing to go
+> wrong in this phase:
+>
+> ```bash
+> helm template pjx-release helm-pjx/ -f helm-pjx/environments/local.yaml \
+>   | grep -oE 'image: [^ ]+' | sed 's/image: //' | sort
+> docker images --format '{{.Repository}}:{{.Tag}}' | grep '^pjx-root-pjx' | sort
+> ```
+>
+> If you `diff` those two lists, strip carriage returns first — the chart
+> templates are CRLF (see `.gitattributes`: the repo was authored on Windows), so
+> rendered output carries `\r` and every line reads as different:
+> `diff <(tr -d '\r' < a) <(tr -d '\r' < b)`.
+
+> `global.imageRegistry: ""` relies on the `pjx.image` helper from
+> [Phase 7 Step 1](phase-7-cicd.md#step-1--parameterise-images) omitting the
+> registry when empty. A naive `printf "%s/%s:%s"` renders
+> `/pjx-root-pjx-web-react:latest` — a leading slash is not a valid reference.
 
 ---
 
