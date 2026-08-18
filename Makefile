@@ -49,7 +49,11 @@ up:  ## Start Traefik, the app services and Grafana
 	@echo "Up. The devcontainer starts when you open the folder in VS Code."
 	@$(MAKE) --no-print-directory status
 
-down:  ## Stop everything, including the devcontainer
+down:  ## Stop everything, including the devcontainer and any k3d cluster
+	@if docker ps -q --filter name=k3d-pjx | grep -q .; then \
+	    echo "==> k3d cluster (k3s idles at ~1.7 GB and ~35% CPU)"; \
+	    docker stop $$(docker ps -q --filter name=k3d-pjx) >/dev/null; \
+	fi
 	@echo "==> app services"
 	@docker compose -f $(DEV_COMPOSE) stop $(APP_SERVICES) 2>/dev/null || true
 	@echo "==> Grafana"
@@ -73,17 +77,24 @@ restart: down up  ## Stop everything, then start it again
 status:  ## Show every pjx container, its state and memory use
 	@printf '  %-30s %-10s %s\n' CONTAINER STATE MEMORY
 	@printf '  %-30s %-10s %s\n' '------------------------------' '----------' '----------'
-	@for p in pjx-root pjx-otel pjx-router; do \
-	    docker ps -a --filter label=com.docker.compose.project=$$p \
-	                 --format '{{.Names}}\t{{.State}}'; \
-	  done | sort | while IFS=$$'\t' read -r n s; do \
+	@{ for p in pjx-root pjx-otel pjx-router; do \
+	      docker ps -a --filter label=com.docker.compose.project=$$p \
+	                   --format '{{.Names}}\t{{.State}}'; \
+	    done; \
+	    docker ps -a --filter name=k3d-pjx --format '{{.Names}}\t{{.State}}'; \
+	  } | sort -u | while IFS=$$'\t' read -r n s; do \
 	    if [ "$$s" = "running" ]; then \
 	        m=$$(docker stats --no-stream --format '{{.MemUsage}}' "$$n" 2>/dev/null | cut -d/ -f1 | xargs); \
 	    else m='-'; fi; \
 	    printf '  %-30s %-10s %s\n' "$$n" "$$s" "$$m"; \
 	done
 	@echo ""
-	@n=$$(docker ps -q --filter name=pjx | wc -l); echo "  $$n running"
+	@n=$$({ for p in pjx-root pjx-otel pjx-router; do \
+	          docker ps -q --filter label=com.docker.compose.project=$$p; \
+	        done; docker ps -q --filter name=k3d-pjx; } | sort -u | wc -l); \
+	  echo "  $$n running"
+	@docker ps -q --filter name=k3d-pjx | grep -q . \
+	  && echo "  note: a k3d cluster is running — 'make down' stops it too" || true
 
 logs:  ## Tail the app service logs (Ctrl+C to stop)
 	@docker compose -f $(DEV_COMPOSE) logs -f --tail=50 $(APP_SERVICES)
