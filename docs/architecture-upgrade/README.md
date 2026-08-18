@@ -90,6 +90,10 @@ You execute the steps. This document is the instruction set, not a changelog.
 - [**How a request reaches a pjx container**](../reference/request-flow.md) —
   name resolution (including the `.localhost` trap), TLS/SNI, Traefik routing,
   and the container network, with diagrams. Worth reading before Phase 2.
+- [**k3d networking, from the browser to the pod**](../reference/k3d-networking.md) —
+  the three address spaces (host / Docker bridge / Kubernetes virtual), the three
+  DNS resolvers, why the kubeconfig k3d writes does not work from the
+  devcontainer, and TLS SANs. Worth reading before Phase 7b.
 - [**The Helm chart, before and after Phase 7**](../reference/helm-chart.md) —
   what Helm actually does with `values.yaml` and `_helpers.tpl`, and diagrams of
   the chart's routing and image resolution either side of Phase 7. Worth reading

@@ -12,6 +12,11 @@ k3d), [Phase 7](phase-7-cicd.md) (charts parameterised — the pre-cleanup chart
 cannot deploy), and [Phase 5](phase-5-otel.md) (health endpoints, so probes have
 something to hit).
 
+**Read first:** [k3d networking, from the browser to the pod](../reference/k3d-networking.md)
+— diagrams of the three address spaces and three DNS resolvers involved. The
+kubeconfig k3d writes does **not** work from the devcontainer, and that document
+explains why and what to run instead.
+
 ```bash
 git checkout -b feature/arch-phase-7b-local-k8s
 ```
@@ -115,6 +120,59 @@ pointed at the right cluster before every `kubectl` command that matters:
 ```bash
 kubectl config current-context      # → k3d-pjx
 ```
+
+> ### 🛑 The kubeconfig k3d writes does not work from the devcontainer
+>
+> `kubectl cluster-info` will fail with:
+>
+> ```
+> The connection to the server 0.0.0.0:38493 was refused
+> ```
+>
+> k3d talks to the **host's** Docker daemon through the mounted socket, so it
+> creates host-level containers and writes a host-level address —
+> `https://0.0.0.0:<random port>`. On the host that means "this machine". Inside
+> the devcontainer it means *the devcontainer*, where nothing is listening.
+>
+> **Do not reach for the host gateway.** `172.17.0.1:38493` connects at the TCP
+> level and still fails, because the API server certificate does not list it:
+>
+> ```
+> DNS: k3d-pjx-server-0, k3d-pjx-serverlb, kubernetes, localhost
+> IP:  0.0.0.0, 10.43.0.1, 127.0.0.1, 172.18.0.2, ::1
+> ```
+>
+> `k3d-pjx-serverlb` **is** a SAN. Join the devcontainer to k3d's network and use
+> that name — TLS verification stays intact:
+>
+> ```bash
+> docker network connect k3d-pjx pjx-root-workspace-1
+> kubectl config set-cluster k3d-pjx --server=https://k3d-pjx-serverlb:6443
+> kubectl get nodes
+> ```
+>
+> | Event | Redo |
+> |---|---|
+> | `k3d cluster stop` / `start` | nothing |
+> | Devcontainer rebuild | `docker network connect` |
+> | `k3d cluster delete` + recreate | **both** — new network, new random API port |
+>
+> Pinning the API address at creation removes the random-port half and puts the
+> name in the certificate:
+>
+> ```bash
+> k3d cluster create pjx \
+>   --port "80:80@loadbalancer" --port "443:443@loadbalancer" \
+>   --api-port k3d-pjx-serverlb:6443 --agents 1
+> ```
+>
+> Full explanation, with diagrams:
+> [k3d networking](../reference/k3d-networking.md#why-kubectl-failed-and-why-the-obvious-fix-also-fails).
+>
+> One more trap while debugging: `docker exec` without `-u vscode` runs as
+> **root**, with a different `HOME` and an empty `~/.kube/config`. A `kubectl`
+> reporting `localhost:8080` is that — 8080 is the hardcoded default when no
+> kubeconfig exists — not a broken cluster.
 
 > **k3s bundles Traefik as its default ingress controller.** That is a real
 > convenience: your `className: traefik` and existing ingress annotations carry
