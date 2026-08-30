@@ -212,6 +212,7 @@ services:
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__PASSWORD=password
+      - PJX_CORS_ORIGINS=https://pjx.test
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/health/ready"]
       interval: 15s

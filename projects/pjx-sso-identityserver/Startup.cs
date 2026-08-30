@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System;
 
 namespace IdentityServerAspNetIdentity
 {
@@ -90,13 +91,21 @@ namespace IdentityServerAspNetIdentity
             builder.AddSigningCredential(rsaCertificate);
 
             services.AddCors(options =>
-                    {
-                        options.AddPolicy("CorsPolicy",
-                            builder => builder.WithOrigins("http://localhost:3000")
-                            .AllowAnyMethod()
-                            .AllowAnyHeader()
-                            .AllowCredentials());
-                    });
+            {
+                options.AddPolicy("CorsPolicy", builder =>
+                {
+                    // Environment-specific: https://pjx.test locally, the public
+                    // hostname in Azure. Comma-separated. AllowCredentials forbids
+                    // a "*" origin, so these must stay explicit.
+                    var corsOrigins = (Configuration["PJX_CORS_ORIGINS"] ?? "https://pjx.test")
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries);
+
+                    builder.WithOrigins(corsOrigins)
+                        .AllowAnyMethod()
+                        .AllowAnyHeader()
+                        .AllowCredentials();
+                });
+            });
             // uncomment to enable Google+ API
             //services.AddAuthentication()
             //    .AddGoogle(options =>
