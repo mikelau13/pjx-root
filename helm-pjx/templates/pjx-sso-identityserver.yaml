@@ -20,6 +20,19 @@ spec:
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         ports:
         - containerPort: 5002
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 80
+          initialDelaySeconds: 20
+          periodSeconds: 30
+          failureThreshold: 3
         env:
         - name: PJX_SSO__PASSWORD
           value: password

@@ -38,9 +38,18 @@ help:  ## Show this help
 	@echo "  Run 'make down' from a HOST terminal to release the devcontainer too."
 	@echo ""
 
+# --force-recreate on Traefik only. A container created while something else held
+# 80/443 records its port bindings but cannot apply them, and a plain `up -d` then
+# just STARTS it: docker ps shows Up with PORTS=[], Traefik routes internally, and
+# every host URL returns 000. Recreating is free — Traefik is stateless — and
+# turns a silent wrong state into a loud bind error.
 up:  ## Start Traefik, the app services and Grafana
 	@echo "==> Traefik"
-	@docker compose -f $(ROUTER_COMPOSE) up -d
+	@docker compose -f $(ROUTER_COMPOSE) up -d --force-recreate
+	@docker port pjx-traefik | grep -q . \
+	  || { echo "!! Traefik published NO ports — something else holds 80/443."; \
+	       echo "   Check:  ps -eo pid,args | grep simpleproxy"; \
+	       echo "           ss -tln | grep -E ':(80|443) '"; }
 	@echo "==> app services"
 	@docker compose -f $(DEV_COMPOSE) up -d $(APP_SERVICES)
 	@echo "==> Grafana"

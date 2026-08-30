@@ -157,14 +157,26 @@ kubectl config current-context      # → k3d-pjx
 > | Devcontainer rebuild | `docker network connect` |
 > | `k3d cluster delete` + recreate | **both** — new network, new random API port |
 >
-> Pinning the API address at creation removes the random-port half and puts the
-> name in the certificate:
+> Pinning the API port at creation removes the random-port half, so the kubeconfig
+> stops changing every time the cluster is recreated:
 >
 > ```bash
 > k3d cluster create pjx \
 >   --port "80:80@loadbalancer" --port "443:443@loadbalancer" \
->   --api-port k3d-pjx-serverlb:6443 --agents 1
+>   --api-port 6443 --agents 1
 > ```
+>
+> `--api-port` takes `[HOST:]PORT`, and any HOST given must already resolve —
+> naming the load balancer container fails, because it does not exist until the
+> cluster is created:
+>
+> ```
+> FATA Failed to lookup host 'k3d-pjx-serverlb' specified for Port Exposure
+> ```
+>
+> A bare port is what you want. It does not change the certificate, so the
+> `set-cluster` fix above is still needed — `k3d-pjx-serverlb` is a SAN by
+> default.
 >
 > Full explanation, with diagrams:
 > [k3d networking](../reference/k3d-networking.md#why-kubectl-failed-and-why-the-obvious-fix-also-fails).
