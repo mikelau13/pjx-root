@@ -48,6 +48,8 @@ spec:
           value: /app/pjx-sso-identityserver.rsa_2048.cert.pfx
         - name: PJX_CORS_ORIGINS
           value: https://{{ .Values.ingress.host }}
+        - name: PJX_SSO__PUBLIC_ORIGIN
+          value: https://sso.{{ .Values.ingress.host }}
 ---
 apiVersion: v1
 kind: Service

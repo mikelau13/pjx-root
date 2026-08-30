@@ -72,6 +72,7 @@ namespace IdentityServerAspNetIdentity
                     CookieLifetime = System.TimeSpan.FromMinutes(5), // TODO: easier to do testing by setting timeout to 5 minutes, will need to change back to hours for production
                     CookieSlidingExpiration = true
                 };
+                options.IssuerUri = Configuration["PJX_SSO__PUBLIC_ORIGIN"] ?? "https://sso.pjx.test";
             })
                 .AddInMemoryIdentityResources(Config.IdentityResources)
                 .AddInMemoryApiScopes(Config.ApiScopes)
