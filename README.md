@@ -26,8 +26,17 @@ Kubernetes Cluster looks like this:
 #### Plant UML (Auto converted by Cluade.Ai)
 
 
-<div hidden>
-```
+<!-- PlantUML source for the diagram above.
+
+     Kept in an HTML COMMENT. It used to be a <div hidden> wrapping a fenced code
+     block, which broke rendering: CommonMark ends a <div> HTML block at the first
+     blank line, so the opening fence was swallowed as raw HTML while the closing
+     one was parsed as an OPENING fence. That flipped fence parity for the entire
+     rest of the file, and every later section rendered as a code block in the
+     Markdown preview while looking correct in the editor.
+
+     An HTML comment is terminated only by its closing marker, never by a blank
+     line, so it is safe for multi-paragraph content.
 @startuml pjx-overview
 
 package "web Pjx" {
@@ -72,8 +81,7 @@ DotnetController -down-> OAuth : "authorize"
 WebReactLogin -right-> MVC : "redirect"
 
 @enduml
-```
-</div>
+-->
 
 ![](/images/pjx-overview.svg)
 

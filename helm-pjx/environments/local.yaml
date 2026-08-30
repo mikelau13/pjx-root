@@ -1,0 +1,36 @@
+# Local k3d cluster (Phase 7b). Images are imported straight into k3s with
+# `k3d image import`, so there is no registry involved.
+
+global:
+  # Empty registry → pjx.image emits a bare name. Not a leading slash — the
+  # helper's if/else exists precisely for this case.
+  imageRegistry: ""
+  imageTag: latest
+  # Never, not IfNotPresent: if an image was not imported, the pod fails
+  # immediately with ErrImageNeverPull instead of spending 30s trying Docker Hub
+  # and reporting ImagePullBackOff, which reads as a network problem.
+  imagePullPolicy: Never
+
+# Docker Compose prefixes built images with its project name, so the images in
+# daemon are pjx-root-pjx-web-react, not pjx-web-react. Override the
+# repository here rather than in values.yaml — the prefix is an artifact of local
+# Compose builds and is wrong for GHCR and ACR.
+web:       { replicas: 1, image: { repository: pjx-root-pjx-web-react } }
+apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
+nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
+dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }
+sso:       { replicas: 1, image: { repository: pjx-root-pjx-sso-identityserver } }
+
+ingress:
+  enabled: true
+  className: traefik
+  host: pjx.test
+  tls:
+    enabled: true
+    # Created in Phase 7b Step 4 from the existing mkcert certificate —
+    # not cert-manager. Covers *.pjx.test and pjx.test, so every hostname works
+    # and the host browser already trusts the CA.
+    secretName: pjx-tls
+
+# The .NET API reaches SSO over in-cluster Service DNS.
+ssoUrl: http://pjx-sso-service:80
