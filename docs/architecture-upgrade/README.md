@@ -18,10 +18,10 @@ to execute them in.
 | 4 | [3 — Grafana LGTM](phase-3-observability.md) | ✅ committed |
 | 5 | [4 — .NET 8](phase-4-dotnet8.md) | ⚠️ committed, one step outstanding — [EF Core still 3.1.7](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) |
 | 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ⚠️ committed — traces, metrics, health checks, dashboard all verified. Three items deferred, see below |
-| 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | ← **next**. Mostly done already: only `kubectl`, `helm`, `k3d`, `k9s` remain |
-| 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | |
-| 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | |
-| 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | |
+| 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | ✅ committed — `kubectl`, `helm`, `k3d`, `k9s`, `azure-cli` pinned in the image |
+| 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | ✅ committed — one routing mechanism, named ports, `pjx.image`, per-environment values |
+| 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | ✅ **full browser pass on k3d** — register, activate, login, `/country/all`, `/cities`, sign out |
+| 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | ← **next** |
 | 11 | [10 — Make the app deployable](phase-10-deployable.md) | |
 | 12 | [9 — Azure foundation](phase-9-azure-foundation.md) | first Azure spend |
 | 13 | [11 — AKS deploy + CD](phase-11-deploy.md) | |
@@ -43,6 +43,42 @@ gate, because Phase 10 is where the app becomes genuinely deployable.
 | [`react-scripts` 3.4.3 pins the React image to EOL Node 14](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script) | 6 | **Phase 10** — `REACT_APP_*` runtime config has the same root cause | [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration) |
 | [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before 10 |
 | [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before 10 |
+| Chart sets ~8 env vars; Compose sets 31 | 7b | nothing yet | 10 |
+| Dev images run in the cluster — `dotnet watch` and webpack compile at pod startup | 7b | nothing yet | 10 |
+| No automated browser test — every CORS bug this phase was invisible to `curl` | 7b | nothing yet | 7c |
+
+Phase 7b's items are all the same underlying fact: **the cluster runs the
+`Dockerfile.dev` images.** Consequences seen while getting the browser pass to
+work —
+
+- Each missing environment variable is a service that starts cleanly and then
+  cannot reach its neighbour: Apollo called the Compose hostname
+  `pjx-api-node:8081`, and dropping the `/api/1` prefix turned `ENOTFOUND` into a
+  `404` that looked like progress.
+- Cold compiles at startup made liveness probes restart pods mid-build; the .NET
+  API took ~10 minutes and 3 restarts to come up.
+- `react-scripts start` exits with code 0 when stdin closes, so React needed
+  `stdin: true` / `tty: true` — the Kubernetes spelling of Compose's
+  `stdin_open`.
+- Two CORS policies still hardcoded `http://localhost:3000` from before Phase 2.
+  `curl` and Bruno ignore CORS entirely, so only a real browser found them.
+
+[Phase 10](phase-10-deployable.md) replaces these with production images, which
+removes the whole class.
+
+> **The k3d edit cycle is not one command.** Source changes do not reach the
+> cluster — pods run from the imported image, and there is no bind mount:
+>
+> ```bash
+> docker compose -f docker-compose.devcontainer.yml build <service>
+> k3d image import pjx-root-<service>:latest -c pjx
+> kubectl -n pjx rollout restart deploy/<deployment>
+> ```
+>
+> The `rollout restart` is required because the tag stays `:latest` — the image
+> ID changed but the reference did not. About four minutes per iteration, so fix
+> application bugs under Compose first, where the bind mount and `dotnet watch`
+> reload in seconds, and bring working code to the cluster once.
 
 Three consequences of the EF Core item worth knowing while working:
 
@@ -94,6 +130,10 @@ You execute the steps. This document is the instruction set, not a changelog.
   the three address spaces (host / Docker bridge / Kubernetes virtual), the three
   DNS resolvers, why the kubeconfig k3d writes does not work from the
   devcontainer, and TLS SANs. Worth reading before Phase 7b.
+- [**CI/CD, registries, and why a chart gets published**](../reference/ci-cd-and-registries.md) —
+  source versus artifacts, what an OCI registry is, what `on: tags` triggers, why
+  a chart you already have still needs publishing, and where Dependabot fits
+  (not in the workflow). Worth reading before Phase 7c.
 - [**The Helm chart, before and after Phase 7**](../reference/helm-chart.md) —
   what Helm actually does with `values.yaml` and `_helpers.tpl`, and diagrams of
   the chart's routing and image resolution either side of Phase 7. Worth reading

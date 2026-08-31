@@ -1,6 +1,6 @@
 apiVersion: v2
-name: helm-pjx
-description: The pjx application — React SPA, Apollo gateway, Node and .NET APIs, IdentityServer
+name: pjx
+description: The pjx application — React SPA, GraphQL gateway, Node and .NET APIs, and an OIDC Identity Server
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -21,4 +21,7 @@ version: 0.2.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.1.0"
+appVersion: "0.2.0"
+home: https://github.com/mikelau13/pjx-root
+sources:
+  - https://github.com/mikelau13/pjx-root

@@ -10,6 +10,11 @@ matching the release pattern documented in `CDE:CLAUDE.md`.
 **Depends on:** [Phase 7](phase-7-cicd.md) (charts parameterised) and
 [Phase 7b](phase-7b-local-k8s.md) (charts proven to actually deploy).
 
+**Read first:** [CI/CD, registries, and why a chart gets published](../reference/ci-cd-and-registries.md)
+— the concepts behind this phase: registries and OCI, the source-versus-artifact
+distinction, what each `on:` trigger fires, image tag semantics, and why
+Dependabot is configured here even though it is not part of any workflow.
+
 ```bash
 git checkout -b feature/arch-phase-7c-cicd
 ```
@@ -29,7 +34,92 @@ it once Actions works.
 
 ---
 
-## Step 3 — GitHub Actions
+## Step 0 — Fix the production Dockerfiles first
+
+**CI builds `Dockerfile`, not `Dockerfile.dev`.** Everything proven in Phase 7b
+used the dev images; the production ones have not been built since before the
+Phase 4 .NET 8 migration, and two of them cannot build at all.
+
+| Service | Production base | State |
+|---|---|---|
+| `pjx-api-dotnet` | `dotnet/core/aspnet:8.0`, `dotnet/core/sdk:8.0` | 🔴 **do not exist** |
+| `pjx-graphql-apollo` | `node:10-slim` | 🔴 EOL April 2021 |
+| `pjx-web-react` | `node:14.5.0-slim` → `nginx:1.19.0` | 🟠 EOL 2023 — [deferred](README.md#deferred-work) |
+| `pjx-sso-identityserver` | `dotnet/core/aspnet:3.1-buster-slim` | 🟠 EOL runtime, valid path — the documented [Phase 8](phase-8-duende.md) deferral |
+| `pjx-api-node` | `node:18-slim` | ✅ |
+
+**`mcr.microsoft.com/dotnet/core/*` stopped at 3.1.** .NET 5 renamed the
+repository, dropping `core/`. Phase 4 updated `Dockerfile.dev` and left
+`Dockerfile` pointing at a tag that has never existed:
+
+```bash
+docker manifest inspect mcr.microsoft.com/dotnet/core/aspnet:8.0   # fails
+docker manifest inspect mcr.microsoft.com/dotnet/aspnet:8.0        # pulls
+```
+
+In `projects/pjx-api-dotnet/Dockerfile`:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+```
+
+In `projects/pjx-graphql-apollo/Dockerfile`, move off Node 10 to match what
+`Dockerfile.dev` already runs successfully:
+
+```dockerfile
+FROM node:18-slim
+```
+
+Leave `pjx-web-react` and `pjx-sso-identityserver` alone. Both are recorded
+deferrals with owners: React's Node 14 is pinned by `react-scripts` 3.4.3 and
+belongs to [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration);
+SSO's 3.1 base belongs to Phase 8 and is the reason for the Dependabot suppression
+below.
+
+### Build all five locally before writing any YAML
+
+CI failures are slow to diagnose. Prove the images build first:
+
+```bash
+for s in pjx-web-react pjx-graphql-apollo pjx-api-node pjx-api-dotnet pjx-sso-identityserver; do
+  echo "==> $s"
+  docker build -t "pjx-prod-$s:test" "projects/$s" || echo "FAILED: $s"
+done
+```
+
+> ### The chart is wired for dev images
+>
+> The Helm chart's React Service targets **3000** — the CRA dev server. The
+> production image is nginx on **80**. Deploy CI-built images with today's chart
+> and React returns 502, the same failure Phase 7b hit from the opposite
+> direction.
+>
+> Make the port a value rather than hardcoding either one:
+>
+> ```yaml
+> # values.yaml
+> web:
+>   service:
+>     port: 80          # production nginx
+> ```
+> ```yaml
+> # environments/local.yaml — dev images
+> web:
+>   service:
+>     port: 3000
+> ```
+>
+> `stdin`/`tty` can go too once React is nginx — those exist only because
+> `react-scripts start` exits when stdin closes.
+>
+> This is **not** a reason to do Phase 10 first. Phase 10's React step is about
+> `REACT_APP_*` runtime configuration, a different problem in the same service.
+> Nothing here needs PostgreSQL, Key Vault, or the EF Core upgrade.
+
+---
+
+## Step 1 — GitHub Actions
 
 CloudDevEnvironment's release pattern (`CDE:CLAUDE.md`):
 
@@ -117,6 +207,22 @@ jobs:
 The `test` job reuses `validate.sh` from Phase 1 rather than duplicating build
 commands in YAML — one definition of "does this build", used locally and in CI.
 
+> **`validate.sh` needs Docker on the runner.** It sources `lib/common.sh`, which
+> runs `docker compose config --services` at load time and `exit 1`s if that
+> returns nothing:
+>
+> ```bash
+> mapfile -t APP_SERVICES < <(
+>     docker compose -f "${COMPOSE_FILE}" config --services | grep -v '^workspace$' | sort
+> )
+> ```
+>
+> GitHub-hosted runners have Docker, so this works — but it couples a job that
+> only compiles source to the compose file parsing, and a failure there reports as
+> "no services found" rather than anything about the build. If that proves
+> annoying, split the service list out of `common.sh` rather than duplicating the
+> build commands in YAML.
+
 `docker/metadata-action` handles the tag→environment mapping declaratively, which
 is simpler than the shell-based version derivation CloudDevEnvironment uses.
 
@@ -172,7 +278,7 @@ updates:
 
 ---
 
-## Step 4 — Chart packaging and metadata
+## Step 2 — Chart packaging and metadata
 
 Fix `Chart.yaml`:
 
