@@ -2,6 +2,7 @@
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules"],
   "compilerOptions": {
+    "skipLibCheck": true,
     "target": "es2017",
     "module": "commonjs",
     "sourceMap": true,

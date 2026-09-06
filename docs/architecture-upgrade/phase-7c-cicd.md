@@ -10,6 +10,12 @@ matching the release pattern documented in `CDE:CLAUDE.md`.
 **Depends on:** [Phase 7](phase-7-cicd.md) (charts parameterised) and
 [Phase 7b](phase-7b-local-k8s.md) (charts proven to actually deploy).
 
+**Read first:** [CI/CD, registries, and why a chart gets published](../reference/ci-cd-and-registries.md)
+and, for Step 0, [docker build, and where images actually live](../reference/docker-build-and-images.md)
+— the concepts behind this phase: registries and OCI, the source-versus-artifact
+distinction, what each `on:` trigger fires, image tag semantics, and why
+Dependabot is configured here even though it is not part of any workflow.
+
 ```bash
 git checkout -b feature/arch-phase-7c-cicd
 ```
@@ -29,7 +35,139 @@ it once Actions works.
 
 ---
 
-## Step 3 — GitHub Actions
+## Step 0 — Fix the production Dockerfiles first
+
+**CI builds `Dockerfile`, not `Dockerfile.dev`.** Everything proven in Phase 7b
+used the dev images; the production ones have not been built since before the
+Phase 4 .NET 8 migration, and two of them cannot build at all.
+
+| Service | Production base | State |
+|---|---|---|
+| `pjx-api-dotnet` | `dotnet/core/aspnet:8.0`, `dotnet/core/sdk:8.0` | 🔴 **do not exist** |
+| `pjx-graphql-apollo` | `node:10-slim` | 🔴 EOL April 2021 |
+| `pjx-web-react` | `node:14.5.0-slim` → `nginx:1.19.0` | 🔴 **build fails** — npm 6 cannot read the v3 lock file |
+| `pjx-sso-identityserver` | `dotnet/core/aspnet:3.1-buster-slim` | 🟠 EOL runtime, valid path — the documented [Phase 8](phase-8-duende.md) deferral |
+| `pjx-api-node` | `node:18-slim` | ✅ |
+
+**`mcr.microsoft.com/dotnet/core/*` stopped at 3.1.** .NET 5 renamed the
+repository, dropping `core/`. Phase 4 updated `Dockerfile.dev` and left
+`Dockerfile` pointing at a tag that has never existed:
+
+```bash
+docker manifest inspect mcr.microsoft.com/dotnet/core/aspnet:8.0   # fails
+docker manifest inspect mcr.microsoft.com/dotnet/aspnet:8.0        # pulls
+```
+
+In `projects/pjx-api-dotnet/Dockerfile`:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+```
+
+In `projects/pjx-graphql-apollo/Dockerfile`, move off Node 10 to match what
+`Dockerfile.dev` already runs successfully:
+
+```dockerfile
+FROM node:18-slim
+```
+
+In `projects/pjx-web-react/Dockerfile`, replace **Stage 1** only:
+
+```dockerfile
+#Stage 1
+FROM node:18-slim AS builder
+WORKDIR /app
+COPY package*.json .npmrc ./
+RUN npm ci
+COPY . .
+RUN NODE_OPTIONS=--openssl-legacy-provider npm run build
+```
+
+This one is not optional, and the reason is not obvious. `node:14.5.0-slim`
+ships **npm 6.14.5**, which only understands `lockfileVersion: 1`. Handed this
+project's v3 `package-lock.json` it does not warn — it ignores the lock and
+resolves every range fresh, pulling an `@types/babel__traverse` that uses
+TypeScript 4.1 key-remapping syntax against this project's pinned `typescript
+^3.7.5`. The build dies with `TS1005 ']' expected` inside `node_modules`.
+`node:18-slim` (npm 10) reads the lock and installs the pinned 7.0.13; `npm ci`
+makes any future drift fail loudly instead of silently. The `NODE_OPTIONS` flag
+is the OpenSSL 3 workaround `react-scripts` 3.4.3 needs on Node 17+ — the
+`start` script already carried it, `build` did not.
+
+Full walkthrough with diagrams:
+[docker-build-and-images.md](../reference/docker-build-and-images.md#case-study-when-the-two-dockerfiles-drift).
+
+This gets the image building; it does **not** retire the deferral.
+`react-scripts` 3.4.3 and `typescript` 3.7.5 stay pinned and now compile on
+Node 18 via a compatibility flag — still owed to
+[Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration).
+
+Leave `pjx-sso-identityserver` alone. Its 3.1 base belongs to Phase 8 and is the
+reason for the Dependabot suppression below.
+
+### Build all five locally before writing any YAML
+
+CI failures are slow to diagnose. Prove the images build first:
+
+```bash
+for s in pjx-web-react pjx-graphql-apollo pjx-api-node pjx-api-dotnet pjx-sso-identityserver; do
+  echo "==> $s"
+  docker build -t "pjx-prod-$s:test" "projects/$s" || echo "FAILED: $s"
+done
+```
+
+`||` fires only on a non-zero exit, so the loop reports all five verdicts
+instead of stopping at the first failure. Expected result once the three fixes
+above are in — note how far the production images fall below the dev ones:
+
+| Image | Prod | Dev |
+|---|---:|---:|
+| `pjx-prod-pjx-web-react:test` | 206 MB | 915 MB |
+| `pjx-prod-pjx-graphql-apollo:test` | 779 MB | 795 MB |
+| `pjx-prod-pjx-api-node:test` | 1.38 GB | 717 MB |
+| `pjx-prod-pjx-api-dotnet:test` | 358 MB | 2.22 GB |
+| `pjx-prod-pjx-sso-identityserver:test` | 357 MB | 1.62 GB |
+
+`pjx-api-node` is *larger* in production than in development. Both Node
+services are single-stage, use `npm install` rather than `npm ci`, and `COPY . .`
+with no `.dockerignore` — and `pjx-api-node` additionally `apt-get install`s
+`python3 make build-essential` for native modules and never discards it. A
+builder stage would drop that toolchain from the shipped image, the way
+`pjx-api-dotnet` drops the SDK. Not blocking Phase 7c; it is the next easy win.
+
+> ### The chart is wired for dev images
+>
+> The Helm chart's React Service targets **3000** — the CRA dev server. The
+> production image is nginx on **80**. Deploy CI-built images with today's chart
+> and React returns 502, the same failure Phase 7b hit from the opposite
+> direction.
+>
+> Make the port a value rather than hardcoding either one:
+>
+> ```yaml
+> # values.yaml
+> web:
+>   service:
+>     port: 80          # production nginx
+> ```
+> ```yaml
+> # environments/local.yaml — dev images
+> web:
+>   service:
+>     port: 3000
+> ```
+>
+> `stdin`/`tty` can go too once React is nginx — those exist only because
+> `react-scripts start` exits when stdin closes.
+>
+> This is **not** a reason to do Phase 10 first. Phase 10's React step is about
+> `REACT_APP_*` runtime configuration, a different problem in the same service.
+> Nothing here needs PostgreSQL, Key Vault, or the EF Core upgrade.
+
+---
+
+## Step 1 — GitHub Actions
 
 CloudDevEnvironment's release pattern (`CDE:CLAUDE.md`):
 
@@ -45,7 +183,11 @@ That is four environments with GHCR→ACR promotion. **For pjx, two is enough** 
 `dev` on branch pushes and `prod` on version tags. Adding UAT and staging for a
 demo project is ceremony without a consumer.
 
-Create `.github/workflows/build.yml`:
+Create `.github/workflows/build.yml`. For a block-by-block reading of this file
+— jobs versus steps, `uses` versus `run`, what the matrix does, and where the
+registry token comes from — see
+[What `.github/workflows/build.yml` actually is](../reference/github-actions-workflow.md).
+
 
 ```yaml
 name: build
@@ -117,6 +259,22 @@ jobs:
 The `test` job reuses `validate.sh` from Phase 1 rather than duplicating build
 commands in YAML — one definition of "does this build", used locally and in CI.
 
+> **`validate.sh` needs Docker on the runner.** It sources `lib/common.sh`, which
+> runs `docker compose config --services` at load time and `exit 1`s if that
+> returns nothing:
+>
+> ```bash
+> mapfile -t APP_SERVICES < <(
+>     docker compose -f "${COMPOSE_FILE}" config --services | grep -v '^workspace$' | sort
+> )
+> ```
+>
+> GitHub-hosted runners have Docker, so this works — but it couples a job that
+> only compiles source to the compose file parsing, and a failure there reports as
+> "no services found" rather than anything about the build. If that proves
+> annoying, split the service list out of `common.sh` rather than duplicating the
+> build commands in YAML.
+
 `docker/metadata-action` handles the tag→environment mapping declaratively, which
 is simpler than the shell-based version derivation CloudDevEnvironment uses.
 
@@ -172,7 +330,7 @@ updates:
 
 ---
 
-## Step 4 — Chart packaging and metadata
+## Step 2 — Chart packaging and metadata
 
 Fix `Chart.yaml`:
 

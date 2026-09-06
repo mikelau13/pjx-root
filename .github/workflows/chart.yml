@@ -1,0 +1,21 @@
+# to publish to GHCR's OCI registry on tags
+name: chart
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint helm-pjx/
+      - run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          helm package helm-pjx/ --version "$VERSION" --app-version "$VERSION"
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          helm push "pjx-${VERSION}.tgz" oci://ghcr.io/${{ github.repository_owner }}/charts
