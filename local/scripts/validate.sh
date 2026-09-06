@@ -43,9 +43,12 @@ for target in "${TARGETS[@]}"; do
     echo "===> ${CMD} ${target}"
 
     if is_dotnet "${target}"; then
+        # SSO has both a .sln and a .csproj at its root, which makes a bare
+        # `dotnet build` fail with MSB1011. Prefer the solution when present.
+        sln="$(find "${dir}" -maxdepth 1 -name '*.sln' -print -quit)"
         case "${CMD}" in
-            test)  (cd "${dir}" && dotnet test)  || FAILED+=("${target}") ;;
-            build) (cd "${dir}" && dotnet build) || FAILED+=("${target}") ;;
+            test)  (cd "${dir}" && dotnet test  "${sln:-.}") || FAILED+=("${target}") ;;
+            build) (cd "${dir}" && dotnet build "${sln:-.}") || FAILED+=("${target}") ;;
             lint)  echo "   (no linter configured for .NET projects — skipped)" ;;
             *) echo "Error: unknown command '${CMD}'." >&2; exit 1 ;;
         esac

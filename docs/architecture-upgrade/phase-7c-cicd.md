@@ -11,6 +11,7 @@ matching the release pattern documented in `CDE:CLAUDE.md`.
 [Phase 7b](phase-7b-local-k8s.md) (charts proven to actually deploy).
 
 **Read first:** [CI/CD, registries, and why a chart gets published](../reference/ci-cd-and-registries.md)
+and, for Step 0, [docker build, and where images actually live](../reference/docker-build-and-images.md)
 — the concepts behind this phase: registries and OCI, the source-versus-artifact
 distinction, what each `on:` trigger fires, image tag semantics, and why
 Dependabot is configured here even though it is not part of any workflow.
@@ -44,7 +45,7 @@ Phase 4 .NET 8 migration, and two of them cannot build at all.
 |---|---|---|
 | `pjx-api-dotnet` | `dotnet/core/aspnet:8.0`, `dotnet/core/sdk:8.0` | 🔴 **do not exist** |
 | `pjx-graphql-apollo` | `node:10-slim` | 🔴 EOL April 2021 |
-| `pjx-web-react` | `node:14.5.0-slim` → `nginx:1.19.0` | 🟠 EOL 2023 — [deferred](README.md#deferred-work) |
+| `pjx-web-react` | `node:14.5.0-slim` → `nginx:1.19.0` | 🔴 **build fails** — npm 6 cannot read the v3 lock file |
 | `pjx-sso-identityserver` | `dotnet/core/aspnet:3.1-buster-slim` | 🟠 EOL runtime, valid path — the documented [Phase 8](phase-8-duende.md) deferral |
 | `pjx-api-node` | `node:18-slim` | ✅ |
 
@@ -71,11 +72,39 @@ In `projects/pjx-graphql-apollo/Dockerfile`, move off Node 10 to match what
 FROM node:18-slim
 ```
 
-Leave `pjx-web-react` and `pjx-sso-identityserver` alone. Both are recorded
-deferrals with owners: React's Node 14 is pinned by `react-scripts` 3.4.3 and
-belongs to [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration);
-SSO's 3.1 base belongs to Phase 8 and is the reason for the Dependabot suppression
-below.
+In `projects/pjx-web-react/Dockerfile`, replace **Stage 1** only:
+
+```dockerfile
+#Stage 1
+FROM node:18-slim AS builder
+WORKDIR /app
+COPY package*.json .npmrc ./
+RUN npm ci
+COPY . .
+RUN NODE_OPTIONS=--openssl-legacy-provider npm run build
+```
+
+This one is not optional, and the reason is not obvious. `node:14.5.0-slim`
+ships **npm 6.14.5**, which only understands `lockfileVersion: 1`. Handed this
+project's v3 `package-lock.json` it does not warn — it ignores the lock and
+resolves every range fresh, pulling an `@types/babel__traverse` that uses
+TypeScript 4.1 key-remapping syntax against this project's pinned `typescript
+^3.7.5`. The build dies with `TS1005 ']' expected` inside `node_modules`.
+`node:18-slim` (npm 10) reads the lock and installs the pinned 7.0.13; `npm ci`
+makes any future drift fail loudly instead of silently. The `NODE_OPTIONS` flag
+is the OpenSSL 3 workaround `react-scripts` 3.4.3 needs on Node 17+ — the
+`start` script already carried it, `build` did not.
+
+Full walkthrough with diagrams:
+[docker-build-and-images.md](../reference/docker-build-and-images.md#case-study-when-the-two-dockerfiles-drift).
+
+This gets the image building; it does **not** retire the deferral.
+`react-scripts` 3.4.3 and `typescript` 3.7.5 stay pinned and now compile on
+Node 18 via a compatibility flag — still owed to
+[Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration).
+
+Leave `pjx-sso-identityserver` alone. Its 3.1 base belongs to Phase 8 and is the
+reason for the Dependabot suppression below.
 
 ### Build all five locally before writing any YAML
 
@@ -87,6 +116,25 @@ for s in pjx-web-react pjx-graphql-apollo pjx-api-node pjx-api-dotnet pjx-sso-id
   docker build -t "pjx-prod-$s:test" "projects/$s" || echo "FAILED: $s"
 done
 ```
+
+`||` fires only on a non-zero exit, so the loop reports all five verdicts
+instead of stopping at the first failure. Expected result once the three fixes
+above are in — note how far the production images fall below the dev ones:
+
+| Image | Prod | Dev |
+|---|---:|---:|
+| `pjx-prod-pjx-web-react:test` | 206 MB | 915 MB |
+| `pjx-prod-pjx-graphql-apollo:test` | 779 MB | 795 MB |
+| `pjx-prod-pjx-api-node:test` | 1.38 GB | 717 MB |
+| `pjx-prod-pjx-api-dotnet:test` | 358 MB | 2.22 GB |
+| `pjx-prod-pjx-sso-identityserver:test` | 357 MB | 1.62 GB |
+
+`pjx-api-node` is *larger* in production than in development. Both Node
+services are single-stage, use `npm install` rather than `npm ci`, and `COPY . .`
+with no `.dockerignore` — and `pjx-api-node` additionally `apt-get install`s
+`python3 make build-essential` for native modules and never discards it. A
+builder stage would drop that toolchain from the shipped image, the way
+`pjx-api-dotnet` drops the SDK. Not blocking Phase 7c; it is the next easy win.
 
 > ### The chart is wired for dev images
 >
@@ -135,7 +183,11 @@ That is four environments with GHCR→ACR promotion. **For pjx, two is enough** 
 `dev` on branch pushes and `prod` on version tags. Adding UAT and staging for a
 demo project is ceremony without a consumer.
 
-Create `.github/workflows/build.yml`:
+Create `.github/workflows/build.yml`. For a block-by-block reading of this file
+— jobs versus steps, `uses` versus `run`, what the matrix does, and where the
+registry token comes from — see
+[What `.github/workflows/build.yml` actually is](../reference/github-actions-workflow.md).
+
 
 ```yaml
 name: build

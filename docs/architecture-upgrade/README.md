@@ -130,10 +130,20 @@ You execute the steps. This document is the instruction set, not a changelog.
   the three address spaces (host / Docker bridge / Kubernetes virtual), the three
   DNS resolvers, why the kubeconfig k3d writes does not work from the
   devcontainer, and TLS SANs. Worth reading before Phase 7b.
+- [**docker build, and where images actually live**](../reference/docker-build-and-images.md) —
+  what the two arguments to `docker build` mean, layers and multi-stage builds,
+  why the dev and production images differ by 1.9 GB, the three separate image
+  stores (host daemon / cluster containerd / registry), and who names an image at
+  each layer. Worth reading before Phase 7c Step 0.
 - [**CI/CD, registries, and why a chart gets published**](../reference/ci-cd-and-registries.md) —
   source versus artifacts, what an OCI registry is, what `on: tags` triggers, why
   a chart you already have still needs publishing, and where Dependabot fits
   (not in the workflow). Worth reading before Phase 7c.
+- [**What `.github/workflows/build.yml` actually is**](../reference/github-actions-workflow.md) —
+  workflow / job / step, why jobs get separate machines, `uses` versus `run`, how
+  the matrix turns one definition into five parallel builds, where the registry
+  token comes from, and why it is a dependency graph rather than a script. Worth
+  reading before Phase 7c Step 1.
 - [**The Helm chart, before and after Phase 7**](../reference/helm-chart.md) —
   what Helm actually does with `values.yaml` and `_helpers.tpl`, and diagrams of
   the chart's routing and image resolution either side of Phase 7. Worth reading
