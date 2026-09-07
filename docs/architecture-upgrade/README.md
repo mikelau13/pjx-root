@@ -16,14 +16,14 @@ to execute them in.
 | 2 | [1 — Script layer](phase-1-script-layer.md) | ✅ committed |
 | 3 | [2 — Traefik, TLS, OIDC](phase-2-traefik.md) | ✅ committed |
 | 4 | [3 — Grafana LGTM](phase-3-observability.md) | ✅ committed |
-| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ⚠️ committed, one step outstanding — [EF Core still 3.1.7](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) |
+| 5 | [4 — .NET 8](phase-4-dotnet8.md) | ✅ committed — [EF Core 8 done 2026-09-07](phase-4-dotnet8.md#how-it-actually-went-2026-09-07), with one real LINQ regression found and fixed |
 | 6 | [5 — OpenTelemetry + health checks](phase-5-otel.md) | ⚠️ committed — traces, metrics, health checks, dashboard all verified. Three items deferred, see below |
 | 7 | [6 — Devcontainer image + k8s toolchain](phase-6-devcontainer-image.md) | ✅ committed — `kubectl`, `helm`, `k3d`, `k9s`, `azure-cli` pinned in the image |
 | 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | ✅ committed — one routing mechanism, named ports, `pjx.image`, per-environment values |
 | 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | ✅ **full browser pass on k3d** — register, activate, login, `/country/all`, `/cities`, sign out |
-| 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | ← **next** |
-| 11 | [10 — Make the app deployable](phase-10-deployable.md) | |
-| 12 | [9 — Azure foundation](phase-9-azure-foundation.md) | first Azure spend |
+| 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | ✅ **green on GHCR** — five production images build and push; chart published as `oci://ghcr.io/mikelau13/charts/pjx:0.2.0` at tag `v0.2.0` |
+| 11 | [10 — Make the app deployable](phase-10-deployable.md) | ← **next** — the local work: EF Core 8, React runtime config, resource limits, chart parity. Prove it on k3d; **no Azure needed** |
+| 12 | [9 — Azure foundation](phase-9-azure-foundation.md) | after 10 — first Azure spend (~$60–70/month running). Provision it when you are days from deploying, not weeks |
 | 13 | [11 — AKS deploy + CD](phase-11-deploy.md) | |
 | 14 | [8 — Duende, then go public](phase-8-duende.md) | optional |
 
@@ -34,18 +34,25 @@ them all to `master`.
 ### Deferred work
 
 Items consciously postponed to reach local Kubernetes sooner. **Everything here
-must be closed before [Phase 10](phase-10-deployable.md)** — that is the agreed
-gate, because Phase 10 is where the app becomes genuinely deployable.
+must be closed before [Phase 9](phase-9-azure-foundation.md)** — that is the
+agreed gate, moved from Phase 10 once it became clear Phase 10 is mostly local
+work. The principle is unchanged: close these while it is free, on a cluster you
+already have, before any of it costs money.
 
 | Item | From | Blocks | Close by |
 |---|---|---|---|
-| [EF Core still 3.1.7 on `net8.0`](phase-4-dotnet8.md#outstanding--ef-core-was-not-upgraded) | 4 | **Phase 10 hard blocker** — `Npgsql...PostgreSQL 8.0.*` needs EF Core 8 | [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql) |
 | [`react-scripts` 3.4.3 pins the React image to EOL Node 14](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script) | 6 | **Phase 10** — `REACT_APP_*` runtime config has the same root cause | [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration) |
 | [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before 10 |
 | [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before 10 |
 | Chart sets ~8 env vars; Compose sets 31 | 7b | nothing yet | 10 |
 | Dev images run in the cluster — `dotnet watch` and webpack compile at pod startup | 7b | nothing yet | 10 |
-| No automated browser test — every CORS bug this phase was invisible to `curl` | 7b | nothing yet | 7c |
+| No automated browser test — every CORS bug this phase was invisible to `curl` | 7b | nothing yet | 10 |
+| React Service port is hardcoded `3000` (CRA dev server); the production image is nginx on `80` | 7c | **deploying CI-built images** — 502 until it is a value | [Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration) |
+| `Pjx_Api_Test` contains only a `.csproj`, and every repository call in `OverlappingCheckTests` is a Moq `.Setup(...)` — **no .NET test executes a real query**. Twelve tests stayed green over the LINQ bug that broke event creation | 7c, 4 | nothing — but CI green means less than it looks | before 9 |
+| `dotnet watch` cannot see host edits — inotify does not cross the bind mount, and neither .NET service sets `DOTNET_USE_POLLING_FILE_WATCHER`. The Node services already carry `CHOKIDAR_USEPOLLING=true` | 4 | every .NET source edit needs a manual container restart | **quick fix, do it now** |
+| Root-owned `bin/`/`obj/` in the bind mount — the .NET dev containers run as root, so MSBuild fails with `MSB3021`/`MSB3231` until `chown`ed from the host. Recurs on every `make up` | 4, 7c | blocks `dotnet build` intermittently | a `user:` mapping on the two .NET services |
+| Apollo and node-api production images are single-stage and larger than their dev images; no `.dockerignore` on four of five projects | 7c | nothing | before 10 |
+| Apollo's production image runs `nodemon` with `--inspect=4555` — a file watcher and open debugger port | 7c | nothing yet | 10 |
 
 Phase 7b's items are all the same underlying fact: **the cluster runs the
 `Dockerfile.dev` images.** Consequences seen while getting the browser pass to
@@ -111,6 +118,17 @@ recommended skipped.
 - **Phase 8 runs last** — the demo is IP-restricted, so the unpatched
   `netcoreapp3.1` SSO container is not internet-facing and the auth migration is
   not a prerequisite for deploying.
+- **Phase 10 moved ahead of Phase 9.** Phase 10 was originally marked *"Depends
+  on: Phase 9 (Azure resources must exist)"*, which would mean provisioning
+  ~$60–70/month of AKS, PostgreSQL, ACR and a static IP and then leaving it idle
+  through the largest block of application work in the plan. Checking the steps,
+  only two tails actually need Azure — storing the signing certificate in Key
+  Vault (Step 1) and reading the Grafana Cloud header from it (Step 6). Step 2
+  explicitly says to run local dev against `postgres:16-alpine` and *not* to
+  point it at Azure; Steps 3 and 5 need nothing. The original ordering predates
+  splitting Phase 7 into 7/7b/7c, which is what gave the project a local k3d
+  cluster to develop against. Run the local work first, provision Azure when the
+  deploy is days away, then finish the two tails and go into Phase 11.
 
 ## How this plan is meant to be used
 
@@ -336,12 +354,12 @@ covers the same need. Revisit only if you miss it.
 | [5](phase-5-otel.md) | OpenTelemetry instrumentation (all but SSO) | Medium | Yes | 3, 4 |
 | [6](phase-6-devcontainer-image.md) | Custom devcontainer Dockerfile with k8s/Helm toolchain | Low | Yes | 4 |
 | [7](phase-7-cicd.md) | Tag-driven CI/CD; clean up Helm charts | Medium | Yes | 6 |
-| [9](phase-9-azure-foundation.md) | Azure: ACR, AKS, PostgreSQL, Key Vault, DNS, Traefik, cert-manager | Low (but **costs money**) | Yes | 7 |
-| [10](phase-10-deployable.md) | SQLite→Postgres, real secrets, probes, React runtime config | **High** | Branch only | 9 |
-| [11](phase-11-deploy.md) | AKS deploy + CD via Actions OIDC federation | Medium | Yes | 10 |
+| [10](phase-10-deployable.md) | SQLite→Postgres, real secrets, probes, React runtime config | **High** | Branch only | 7b — **not 9**, see below |
+| [9](phase-9-azure-foundation.md) | Azure: ACR, AKS, PostgreSQL, Key Vault, DNS, Traefik, cert-manager | Low (but **costs money**) | Yes | 7c |
+| [11](phase-11-deploy.md) | AKS deploy + CD via Actions OIDC federation | Medium | Yes | 9, 10 |
 | [8](phase-8-duende.md) | **Optional** — SSO to Duende + `net8.0`; then drop the IP restriction | Medium-high | Branch only | 11 |
 
-**Execution order is 0 → 7, then 9 → 11, then 8.** Phase 8 keeps its number
+**Execution order is 0 → 7c, then 10 → 9 → 11, then 8.** Phase 8 keeps its number
 (it was reviewed under it) but runs last: the demo is IP-restricted, so the
 unpatched `netcoreapp3.1` SSO container is not internet-facing and the auth
 migration is not a prerequisite for deploying. Making the demo public is the

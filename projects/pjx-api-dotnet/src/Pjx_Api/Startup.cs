@@ -127,7 +127,7 @@ namespace Pjx_Api
                         .AddOtlpExporter());
             }
 
-            services.AddHealthChecks();
+            services.AddHealthChecks().AddDbContextCheck<CalendarDbContext>();
         }
 
         public void Configure(IApplicationBuilder app)

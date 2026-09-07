@@ -11,6 +11,14 @@ the cost section before running anything.
 
 **Depends on:** [Phase 7c](phase-7c-cicd.md) (images in GHCR) and [Phase 7b](phase-7b-local-k8s.md) — the chart should already deploy successfully on a local cluster before you provision a paid one.
 
+> **Run [Phase 10](phase-10-deployable.md) first.** Nothing here technically
+> requires it, but the billing meter starts the moment this phase completes, and
+> Phase 10 is the largest block of application work left. Provisioning Azure and
+> then spending weeks on `Startup.cs` means paying ~$60–70/month for idle
+> infrastructure. Phase 10 is almost entirely local work provable on k3d — only
+> two tails need Key Vault, and they are quick once it exists. Come here when the
+> deploy is days away, not weeks.
+
 ```bash
 git checkout -b feature/arch-phase-9-azure-foundation
 ```

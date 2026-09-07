@@ -383,7 +383,15 @@ server. A green build proves nothing about that boundary.
 
 ---
 
-## Outstanding — EF Core was not upgraded
+## Outstanding — EF Core was not upgraded — ✅ **RESOLVED 2026-09-07**
+
+> **Done.** All EF Core references are now `8.0.0`, verified against the running
+> container's `Pjx_Api.deps.json` (no `3.1.7` anywhere in the resolved graph).
+> Create, update, country list and city list all pass a browser test, and
+> `AddDbContextCheck` is restored. See
+> [How it actually went](#how-it-actually-went-2026-09-07) at the end of this
+> section. Everything below is kept as the original record.
+
 
 **Discovered during Phase 5 Step 5b, 2026-08-08.** [Step 2](#step-2--upgrade-bottom-up)
 says to update every `Microsoft.EntityFrameworkCore.*` `PackageReference` to
@@ -475,20 +483,122 @@ dependency against the EF Core version in use, not the project's
 
 ### Where this lands in later phases
 
-| Phase | Impact |
-|---|---|
-| [5](phase-5-otel.md) | No EF spans. The .NET API's readiness check omits the database. |
-| [6](phase-6-devcontainer-image.md) | The image pins `dotnet-ef` 8.x, which cannot operate on an EF Core 3.1 project — `dotnet ef migrations` fails. |
-| [7b](phase-7b-local-k8s.md) | The .NET API's readiness probe passes without proving the database is reachable. |
-| [10](phase-10-deployable.md) | **Hard blocker.** `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.\* requires EF Core 8 — the same mismatch, but on the critical path. |
-| [8](phase-8-duende.md) | Already bumps SSO's EF Core to 8.0.x, so SSO is covered there. |
-| [11](phase-11-deploy.md) | A pod can report Ready while its database is unreachable. Acceptable for a demo, not for production. |
+| Phase | Impact | Now |
+|---|---|---|
+| [5](phase-5-otel.md) | No EF spans. The .NET API's readiness check omits the database. | ✅ `AddDbContextCheck` restored; EF spans should now appear |
+| [6](phase-6-devcontainer-image.md) | The image pins `dotnet-ef` 8.x, which cannot operate on an EF Core 3.1 project — `dotnet ef migrations` fails. | ✅ resolved |
+| [7b](phase-7b-local-k8s.md) | The .NET API's readiness probe passes without proving the database is reachable. | ⚠️ partly — see the SQLite caveat below |
+| [10](phase-10-deployable.md) | **Hard blocker.** `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.\* requires EF Core 8 — the same mismatch, but on the critical path. | ✅ unblocked |
+| [8](phase-8-duende.md) | Already bumps SSO's EF Core to 8.0.x, so SSO is covered there. | unchanged — SSO stays on 3.1 |
+| [11](phase-11-deploy.md) | A pod can report Ready while its database is unreachable. Acceptable for a demo, not for production. | ⚠️ see below |
 
-**Recommendation: do the upgrade as Step 0 of [Phase 10](phase-10-deployable.md).**
-That phase already swaps the database provider and regenerates migrations, so the
-EF Core 8 LINQ regressions and the PostgreSQL switch get tested in one browser
-pass instead of two. Phase 6's `dotnet-ef` pin is the one item worth handling
-sooner, since it is already in the repository.
+> **The readiness probe is still weak, for a different reason.**
+> `AddDbContextCheck` calls `CanConnectAsync()`, and `Microsoft.Data.Sqlite` opens
+> in `ReadWriteCreate` mode by default — so it can create an empty database file
+> and report healthy. The check becomes meaningful once
+> [Phase 10 Step 2](phase-10-deployable.md#step-2--sqlite--postgresql) moves to
+> PostgreSQL, where a connection failure is a real failure. Until then
+> `/health/ready` returning `Healthy` proves the process and the check pipeline
+> work, not that the data is there.
+
+**Recommendation was: do the upgrade as Step 0 of
+[Phase 10](phase-10-deployable.md).** That is what happened, though the PostgreSQL
+switch was *not* folded in with it — Step 2 is deferred, so EF Core 8 was verified
+against SQLite on its own. That turned out to be the better split: the one LINQ
+regression was unambiguously attributable, which was the whole point of doing this
+separately.
+
+---
+
+### How it actually went (2026-09-07)
+
+Done on `feature/arch-phase-10-deployable` rather than a dedicated `fix/ef-core-8`
+branch, as the first item of Phase 10's local work. Three failures, in order.
+
+**1. `CS1061: 'IConfigurationSection' does not contain a definition for 'GetValue'`**
+
+Four call sites in `Pjx.CalendarLibrary/Extensions/CalendarEventServiceExtensions.cs`.
+`GetValue<T>()` is an extension method in `ConfigurationBinder`, which ships in
+**`Microsoft.Extensions.Configuration.Binder`**. EF Core 3.1.7 pulled that package
+in transitively; EF Core 8 trimmed its dependency graph and no longer does. The
+code did not change — its supply chain did.
+
+Fixed by adding the package explicitly to `Pjx.CalendarLibrary`. A solution-wide
+grep for `GetValue<`, `.Bind(` and `.Get<` confirmed those four were the only
+configuration-binder uses, so there was no second wave.
+
+**2. `MSB3021: Access to the path … is denied`**
+
+Root-owned `bin/`/`obj/` inside the bind mount — the .NET dev containers run as
+root and write build output through the mount, and the devcontainer is `vscode`.
+Not an EF Core issue at all. Fixed from the host with `chown -R`, not `rm`, per
+the [working conventions](README.md#working-conventions). It recurs on every
+`make up`; the durable fix is a `user:` mapping on the two .NET services.
+
+**3. The actual LINQ regression — `ArgumentOutOfRangeException`**
+
+The one this section predicted, and it surfaced exactly where predicted: the
+conflict-check path.
+
+```
+System.InvalidOperationException: An exception was thrown while attempting to
+  evaluate a LINQ query parameter expression.
+ ---> System.ArgumentOutOfRangeException: The added or subtracted value results
+      in an un-representable DateTime. (Parameter 'value')
+    at System.DateTimeOffset.AddDays(Double days)
+    at ...ParameterExtractingExpressionVisitor.GetValue(...)
+    at Pjx_Api.Data.CalendarEventRepository.GetAllBetweenByUser(...)
+    at Pjx.CalendarLibrary.ConflictChecks.ConflictCheck.DoCheck(...)
+```
+
+`ConflictCheck.cs:28` passes the full range to mean *"every event for this user"*:
+
+```csharp
+_repository.GetAllBetweenByUser(ce.UserId, DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
+```
+
+and `CalendarEventRepository.GetAllBetweenByUser` did `start.AddDays(-1)` inside
+the `Where` predicate. `DateTimeOffset.MinValue.AddDays(-1)` is invalid — there is
+no day before year 1.
+
+**That arithmetic has been wrong since 2020.** EF Core 3.1 never executed it.
+EF Core 8's `ParameterExtractingExpressionVisitor` eagerly evaluates any
+sub-expression that does not reference the entity, in order to turn it into a SQL
+parameter — `start.AddDays(-1)` is a captured local, so it gets computed, and
+throws. The upgrade did not introduce the bug; it started running it.
+
+Fixed in the repository rather than the caller, so both call sites are covered,
+and with the arithmetic **hoisted out of the expression tree** so EF passes plain
+parameters:
+
+```csharp
+DateTimeOffset startPrev = start > DateTimeOffset.MinValue.AddDays(1)
+    ? start.AddDays(-1) : DateTimeOffset.MinValue;
+DateTimeOffset endPrev = end > DateTimeOffset.MinValue.AddDays(1)
+    ? end.AddDays(-1) : DateTimeOffset.MinValue;
+```
+
+`DateTimeOffset.Compare` turned out to translate fine under EF Core 8 — the
+predicate needed no operator rewrite.
+
+### Two findings worth carrying forward
+
+**`dotnet watch` cannot see host edits through a bind mount.** After the fix was
+written and built, the same stack trace reappeared byte-for-byte. The source was
+current in both namespaces and `Pjx_Api.dll` was 18 seconds newer than the `.cs`
+file — but the container had started 26 minutes earlier and the logs contained
+**no watch rebuild or restart line at all**. inotify events do not cross a Docker
+bind mount, and `:cached` makes it worse. The Node services already carry
+`CHOKIDAR_USEPOLLING=true` for exactly this reason; the .NET services had no
+equivalent. Add `DOTNET_USE_POLLING_FILE_WATCHER=1` to both, or restart the
+container after every .NET edit. Until then `dotnet watch` here is decorative.
+
+**Twelve green tests over a query that threw.** Every `GetAllBetweenByUser`
+reference in `Pjx.Calendar_Test/ConflictChecks/OverlappingCheckTests.cs` is a Moq
+`.Setup(...)`. The repository is mocked, so the LINQ expression is never built and
+never evaluated. The tests passed throughout. Combined with `Pjx_Api_Test`
+containing only a `.csproj`, the .NET API has **no test that executes a real
+query** — which is why a browser pass, not a green suite, was the gate here.
 
 ---
 

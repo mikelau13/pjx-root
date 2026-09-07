@@ -9,11 +9,54 @@ after Phase 4.
 
 **Reversible:** yes, but the database migration is one-way in practice.
 
-**Depends on:** Phase 9 (Azure resources must exist).
+**Depends on:** [Phase 7b](phase-7b-local-k8s.md) (a local cluster to prove the
+changes against). **Not Phase 9** — most of this phase is local work.
+
+> **Ordering — corrected.** This line previously read *"Depends on: Phase 9
+> (Azure resources must exist)"*, which would have you provisioning ~$60–70/month
+> of Azure and then leaving it idle for weeks of application work. Only two tails
+> of this phase actually touch Azure:
+>
+> | Step | Needs Azure? |
+> |---|---|
+> | 1 — signing certificate | **only the tail** — `openssl` generation is local; `az keyvault secret set` and the CSI mount are not |
+> | 2 — SQLite → PostgreSQL | **no** — [the step itself](#local-development-stays-on-sqlite-or-containerised-postgres) says to use `postgres:16-alpine` locally and *not* to point local dev at Azure |
+> | 3 — React runtime configuration | no |
+> | 5 — resource requests and limits | no |
+> | 6 — observability wiring | **only the tail** — Grafana Cloud's auth header is read from Key Vault; Grafana Cloud itself is free tier, not Azure |
+>
+> **Run the local work first, on k3d, with production images.** Provision Phase 9
+> when you are days from deploying, then come back for the two tails and go
+> straight into [Phase 11](phase-11-deploy.md). The original ordering predates
+> Phase 7 being split into 7/7b/7c, which is what gave this project a local
+> cluster to develop against.
 
 ```bash
 git checkout -b feature/arch-phase-10-deployable
 ```
+
+---
+
+## Suggested order within this phase
+
+The step numbers are **not** the order to run them. Two subsections of Step 1 and
+one of Step 6 need Azure; everything else is local work provable on k3d. Do the
+free work first:
+
+| Do | What | Needs Azure |
+|---|---|---|
+| ~~1~~ | ✅ **done 2026-09-07** — [EF Core 3.1.7 → 8](phase-4-dotnet8.md#how-it-actually-went-2026-09-07), Step 2's prerequisite. One real LINQ regression, found and fixed | no |
+| 2 | [Step 3](#step-3--react-runtime-configuration) — React runtime config, plus making the React Service port a chart value | no |
+| 3 | [Step 5](#step-5--resource-requests-and-limits) — resource requests and limits | no |
+| 4 | [Step 1c](#step-1c--one-small-code-change-no-azure-needed) — the `Path.IsPathRooted` edit, on its own | no |
+| 5 | [Step 2](#step-2--sqlite--postgresql) — SQLite → PostgreSQL against `postgres:16-alpine` | no |
+| — | **[Phase 9](phase-9-azure-foundation.md) — provision Azure here** | — |
+| 6 | [Step 1a](#step-1a--generate-and-store-after-phase-9) + [Step 1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9) — store the certificate and mount it | **yes** |
+| 7 | [Step 6](#step-6--observability-wiring) — the Grafana Cloud header comes from Key Vault | **yes** |
+| — | [Phase 11](phase-11-deploy.md) — deploy | — |
+
+Steps 1a, 1b and 7 are quick once Key Vault exists, and 1b cannot be *tested*
+before then regardless — the CSI driver only runs in AKS.
 
 ---
 
@@ -34,8 +77,17 @@ Six things make the current application non-deployable. Ordered by severity:
 
 ## Step 1 — Replace the signing certificate
 
-**Do this first.** It is the only item that is a live vulnerability rather than
-an operational gap.
+**The most important item in this phase.** It is the only one that is a live
+vulnerability rather than an operational gap.
+
+> **This step is split.** Reading the background and making the code change
+> ([Step 1c](#step-1c--one-small-code-change-no-azure-needed)) need nothing.
+> Storing the certificate ([1a](#step-1a--generate-and-store-after-phase-9)) and
+> mounting it ([1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9)) require
+> Key Vault, so they run **after [Phase 9](phase-9-azure-foundation.md)**. Note
+> that `local/scripts/azure/00-vars.sh` — which 1a sources for `${KV}` — is
+> created by [Phase 9 Step 1](phase-9-azure-foundation.md#step-1--naming-and-a-script-to-hold-it)
+> and does not exist yet.
 
 ### Understand what cannot be undone
 
@@ -51,7 +103,10 @@ permanently compromised and never use it anywhere but localhost.**
 So: generate a new one, keep it out of git entirely, and leave the old one alone
 or delete it as tidying — not as remediation.
 
-### Generate and store
+### Step 1a — Generate and store (**after Phase 9**)
+
+> Requires Key Vault. Skip on a first pass through this phase.
+
 
 ```bash
 source local/scripts/azure/00-vars.sh
@@ -76,7 +131,13 @@ shred -u /tmp/sso-signing.key /tmp/sso-signing.crt /tmp/sso-signing.pfx
 > it does not authenticate a TLS endpoint. It never needs to be CA-issued. Its
 > only consumer is the API validating tokens via the discovery document's JWKS.
 
-### Mount it via the CSI driver
+### Step 1b — Mount it via the CSI driver (**after Phase 9**)
+
+> The template below is guarded by `{{- if .Values.keyVault.enabled }}`, so it is
+> safe to add early — with the flag false it renders to nothing and `helm
+> template` still passes. It cannot be *tested* until AKS has the Secrets Store
+> CSI driver.
+
 
 `helm-pjx/templates/pjx-secretprovider.yaml`:
 
@@ -122,17 +183,25 @@ spec:
 {{- end }}
 ```
 
-Then **delete `helm-pjx/templates/pjx-secret.yaml` entirely.** Nothing should
-replace it — secrets now come from Key Vault at pod start.
+> **Stale as written.** This step used to say *"delete
+> `helm-pjx/templates/pjx-secret.yaml` entirely"*. That file no longer exists —
+> the [Phase 7](phase-7-cicd.md) chart cleanup removed it. Nothing to delete;
+> secrets come from Key Vault at pod start. Check `helm-pjx/templates/` before
+> looking for it.
 
-### One small code change
+### Step 1c — One small code change (no Azure needed)
 
-`Startup.cs:85-87` loads the certificate relative to the content root:
+**Safe to do now.** This is the only part of Step 1 that runs without Key Vault,
+and it changes nothing locally.
+
+`projects/pjx-sso-identityserver/Startup.cs:88-90` loads the certificate relative
+to the content root (the file uses fully-qualified type names, so match on this
+exactly):
 
 ```csharp
-string certFile = section["CERTIFICATE"] ?? "pjx-sso-identityserver.rsa_2048.cert.pfx";
-var rsaCertificate = new X509Certificate2(
-    Path.Combine(Environment.ContentRootPath, certFile), certPassword);
+            string certFile = section["CERTIFICATE"] ?? "pjx-sso-identityserver.rsa_2048.cert.pfx";
+            string certPassword = section["PASSWORD"] ?? "password";
+            var rsaCertificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(System.IO.Path.Combine(Environment.ContentRootPath, certFile), certPassword);
 ```
 
 The CSI driver mounts to an absolute path such as `/mnt/secrets/sso-signing-pfx`,
@@ -140,14 +209,24 @@ and `Path.Combine` with a rooted second argument discards the first — so this
 happens to work already. Make it explicit rather than relying on that:
 
 ```csharp
-string certFile = section["CERTIFICATE"] ?? "pjx-sso-identityserver.rsa_2048.cert.pfx";
-string certPath = Path.IsPathRooted(certFile)
-    ? certFile
-    : Path.Combine(Environment.ContentRootPath, certFile);
-var rsaCertificate = new X509Certificate2(certPath, certPassword);
+            string certFile = section["CERTIFICATE"] ?? "pjx-sso-identityserver.rsa_2048.cert.pfx";
+            string certPassword = section["PASSWORD"] ?? "password";
+            string certPath = System.IO.Path.IsPathRooted(certFile)
+                ? certFile
+                : System.IO.Path.Combine(Environment.ContentRootPath, certFile);
+            var rsaCertificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(certPath, certPassword);
 ```
 
-Local development is unaffected — the relative default still resolves.
+Local development is unaffected — `PJX_SSO__CERTIFICATE` is unset, so the
+relative default still resolves against the content root exactly as before.
+
+Verify with a browser sign-in on k3d, or:
+
+```bash
+curl -sk https://sso.pjx.test/.well-known/openid-configuration/jwks | head -5
+```
+
+A changed or empty JWKS means the certificate stopped loading.
 
 ---
 
@@ -454,6 +533,12 @@ for Traefik, cert-manager, the CSI driver, and kube-system.
 ---
 
 ## Step 6 — Observability wiring
+
+> **Partly after Phase 9.** The exporter configuration and the env-var
+> plumbing are local work. The Grafana Cloud auth header is read from Key
+> Vault, so that half waits — see the
+> [order table](#suggested-order-within-this-phase).
+
 
 Phase 5 made the exporter conditional on `OTEL_EXPORTER_OTLP_ENDPOINT`. Two
 additions:

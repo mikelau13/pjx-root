@@ -97,6 +97,7 @@ services:
       - ASPNETCORE_URLS=http://+:80
       - PJX_SSO__AUTHORITY=https://sso.pjx.test
       - PJX_CORS_ORIGINS=https://pjx.test
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
     working_dir: /app/src/Pjx_Api
     command: ["sh", "-c", "update-ca-certificates && dotnet watch run --urls http://0.0.0.0:80"]
     extra_hosts:
@@ -213,6 +214,7 @@ services:
       - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__PASSWORD=password
       - PJX_CORS_ORIGINS=https://pjx.test
+      - DOTNET_USE_POLLING_FILE_WATCHER=1
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/health/ready"]
       interval: 15s
