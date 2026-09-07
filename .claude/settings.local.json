@@ -23,5 +23,6 @@
       "Bash(read -r l)",
       "Bash([ -f \"docs/reference/$l\" ])"
     ]
-  }
+  },
+  "outputStyle": "Concise"
 }
