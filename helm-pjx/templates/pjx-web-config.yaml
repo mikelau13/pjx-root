@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pjx-web-config
+data:
+  config.js: |
+    window.__PJX_CONFIG__ = {
+      GRAPHQL_ENDPOINT: "https://{{ .Values.ingress.host }}/graphql",
+      SSO_ISSUER_URL:   "https://{{ .Values.ingress.host }}/auth",
+      SSO_CLIENT_ID:    "pjx-web-react",
+      API_DOTNET_URL:   "https://{{ .Values.ingress.host }}/api",
+      PUBLIC_URL:       "https://{{ .Values.ingress.host }}"
+    };

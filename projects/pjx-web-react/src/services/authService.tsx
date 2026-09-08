@@ -1,5 +1,6 @@
 import { IDENTITY_CONFIG, METADATA_OIDC } from "../utils/authConst";
 import { UserManager, WebStorageStateStore, Log, User } from "oidc-client";
+import { config } from "../utils/runtimeConfig";
 
 export default class AuthService {
     UserManager: UserManager;
@@ -67,7 +68,7 @@ export default class AuthService {
     };
 
     isAuthenticated = () => {
-        const oidcStorage = JSON.parse(sessionStorage.getItem(`oidc.user:${process.env.REACT_APP_SSO_ISSUER_URL}:${process.env.REACT_APP_SSO_CLIENT_ID}`) ?? '{}')
+        const oidcStorage = JSON.parse(sessionStorage.getItem(`oidc.user:${config.ssoIssuerUrl}:${config.ssoClientId}`) ?? '{}')
 
         return (!!oidcStorage && !!oidcStorage.access_token);
     };
@@ -104,7 +105,7 @@ export default class AuthService {
     signoutRedirectCallback = () => {
         this.UserManager.signoutRedirectCallback().then(() => {
             localStorage.clear();
-            window.location.replace(process.env.REACT_APP_PUBLIC_URL ?? '/');
+            window.location.replace(config.publicUrl ?? '/');
         });
         this.UserManager.clearStaleState();
     };

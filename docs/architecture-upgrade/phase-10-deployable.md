@@ -366,25 +366,59 @@ Left unaddressed, the deployed app loads and then tries to reach whatever was
 baked in at build time — `https://api.pjx.test` after Phase 2 — which does not
 resolve from a user's browser pointed at your AKS demo.
 
-> ### Also fix the Node version here — same root cause
+> ### Node version — **partly done, differently than planned (2026-09-06)**
 >
-> `projects/pjx-web-react/Dockerfile` builds on **`node:14.5.0-slim`, EOL since
-> April 2023**. It cannot move to Node 18 while `react-scripts` is on 3.4.3:
-> webpack 4 hashes with MD4, which OpenSSL 3 removed, and the
-> `--openssl-legacy-provider` escape hatch does not exist on Node 14 (`node: bad
-> option`) — so there is no single flag that satisfies both. Details in
-> [Phase 6 Step 3](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script).
+> This section used to say the build was stuck on `node:14.5.0-slim` until
+> `react-scripts` was upgraded, because webpack 4 hashes with MD4 (removed in
+> OpenSSL 3) and `--openssl-legacy-provider` does not exist on Node 14. The
+> conclusion — that Node could not move first — turned out to be wrong.
 >
-> Both problems are the same dependency: `react-scripts` 3.4.3 freezes config at
-> build time **and** pins the build to an EOL runtime. Upgrading it unlocks both,
-> so do them together rather than working around each separately:
+> [Phase 7c Step 0](phase-7c-cicd.md#step-0--fix-the-production-dockerfiles-first)
+> moved the production Dockerfile to **`node:18-slim`** while leaving
+> `react-scripts` on 3.4.3, using the flag on Node 18's side:
 >
-> 1. Upgrade `react-scripts` (5.x, or migrate to Vite)
-> 2. Bump `Dockerfile` to `node:18-alpine` and drop the
->    `--openssl-legacy-provider` handling from `local/scripts/validate.sh`
-> 3. Then apply the runtime-config change below
+> ```dockerfile
+> FROM node:18-slim AS builder
+> RUN npm ci
+> RUN NODE_OPTIONS=--openssl-legacy-provider npm run build
+> ```
 >
-> Doing (3) alone leaves an EOL Node building the image you ship to production.
+> That works because the flag exists on Node 18 — the original reasoning had it
+> backwards. It was forced by an unrelated problem: node:14 ships npm 6, which
+> cannot read this project's `lockfileVersion: 3` lock file and silently resolved
+> a newer `@types/babel__traverse` than TypeScript 3.7.5 can parse. See
+> [docker-build-and-images.md](../reference/docker-build-and-images.md#case-study-when-the-two-dockerfiles-drift).
+>
+> **Current state:**
+>
+> | Item | State |
+> |---|---|
+> | `Dockerfile` builder stage | ✅ `node:18-slim` |
+> | `Dockerfile` serve stage | ❌ still `nginx:1.19.0` (2020) |
+> | `react-scripts` | ❌ still 3.4.3, EOL, config frozen at build time |
+> | `typescript` | ❌ still `^3.7.5` |
+> | `--openssl-legacy-provider` | in both `Dockerfile` and `local/scripts/validate.sh:63` — **keep both** until `react-scripts` moves |
+>
+> So the ordering constraint is gone. **The runtime-config change below no longer
+> has to wait for the `react-scripts` upgrade** — it is independent, and doing it
+> now is what lets a CI-built image be pointed at AKS. Upgrading `react-scripts`
+> (5.x, or Vite) is still owed, and is what finally removes the OpenSSL flag from
+> two places. `local/scripts/validate.sh:56-59` carries a comment whose premise
+> ("the production Dockerfile is on Node 14 … and REJECTS it") is now false —
+> correct it whenever you next touch that file.
+
+### Where this step stands (2026-09-07)
+
+| | Item | State |
+|---|---|---|
+| 3 | `src/utils/runtimeConfig.ts` | ✅ |
+| 3 | `public/config.js` + `<script>` in `public/index.html` | ✅ verified in `build/` output |
+| 3 | The 24 `process.env.REACT_APP_*` references across 6 files | ✅ `tsc --noEmit` clean, `validate.sh build` passes |
+| 3 | Browser pass on Compose — sign in, country, city, calendar, Profile, sign out | ⬜ |
+| 3 | ConfigMap under `templates/` | ⬜ wrong directory, see 🛑 below |
+| **3b** | Mount it, and make the React port a value | ⬜ |
+| **3c** | Warn when `config.js` fails to load | ⬜ |
+| — | `nginx:1.19.0` → `nginx:1.27-alpine` | ⬜ see the end of this step |
 
 **The fix:** serve configuration as a separate file that nginx delivers and the
 bundle reads at startup.
@@ -425,20 +459,64 @@ export const config = {
 };
 ```
 
-Files to update — all identified in Phase 2:
+Files to update — all identified in Phase 2. **24 references across 6 files**,
+verified 2026-09-07:
 
-- `src/utils/authConst.tsx` — the largest, builds ~12 OIDC endpoints from `REACT_APP_SSO_ISSUER_URL`
-- `src/apollo/apolloClient.tsx`
-- `src/services/countryService.tsx`
-- `src/services/calendarService.tsx`
-- `src/services/authService.tsx`
-- `src/components/Menu/leftNavigator.tsx`
+| File | Line(s) | Reads |
+|---|---|---|
+| `src/utils/authConst.tsx` | **2–29 (17 refs)** | `SSO_ISSUER_URL` ×13, `SSO_CLIENT_ID`, `SSO_REDIRECT_URL`, `SILENT_REDIRECT_URL`, `LOGOFF_REDIRECT_URL` |
+| `src/apollo/apolloClient.tsx` | 12 | `GRAPHQL_ENDPOINT` |
+| `src/services/countryService.tsx` | 17 | `API_DOTNET_URL` |
+| `src/services/calendarService.tsx` | 22 | `API_DOTNET_URL` |
+| `src/services/authService.tsx` | 70, 107 | `SSO_CLIENT_ID`, `PUBLIC_URL` |
+| `src/components/Menu/leftNavigator.tsx` | 94 | `PUBLIC_URL` |
 
-Derived values like `REACT_APP_SSO_REDIRECT_URL` should be **computed** from
-`publicUrl` rather than configured separately — five URLs that must agree is five
-chances to typo one.
+Each edit is mechanical — `process.env.REACT_APP_API_DOTNET_URL` becomes
+`config.apiDotnetUrl`, with an import of `runtimeConfig`. `authConst.tsx` is 17 of
+the 24, so assign `const issuer = config.ssoIssuerUrl;` once at the top and build
+the endpoints off it; that collapses 13 references to one.
 
-Then the ConfigMap:
+> **`runtimeConfig.ts` deliberately covers 5 of the 8 variables.** There are eight
+> distinct `REACT_APP_*` values in `.env`, and the three redirect URIs are all
+> `publicUrl` plus a fixed path:
+>
+> ```
+> REACT_APP_SSO_REDIRECT_URL     = https://pjx.test/signin-oidc
+> REACT_APP_SILENT_REDIRECT_URL  = https://pjx.test/silentrenew
+> REACT_APP_LOGOFF_REDIRECT_URL  = https://pjx.test/logout/callback
+> ```
+>
+> **Compute** those in `authConst.tsx` rather than adding them to the config
+> object or the ConfigMap:
+>
+> ```typescript
+> const issuer = config.ssoIssuerUrl;
+> const publicUrl = config.publicUrl;
+>
+> export const IDENTITY_CONFIG = {
+>     authority: issuer,
+>     client_id: config.ssoClientId,
+>     redirect_uri: `${publicUrl}/signin-oidc`,
+>     silent_redirect_uri: `${publicUrl}/silentrenew`,
+>     post_logout_redirect_uri: `${publicUrl}/logout/callback`,
+>     login: `${issuer}/login`,
+>     // … the rest unchanged
+> };
+> ```
+>
+> That takes the ConfigMap from eight values to five and removes the case where
+> four URLs agree and the fifth has a typo. It matters because those three
+> redirect URIs must **exactly** match `Config.cs` on the SSO side — the same
+> exact-match discipline as [Phase 2](phase-2-traefik.md) step 5, and the cause of
+> the 401 debugged in [Phase 7b](phase-7b-local-k8s.md).
+
+> **`.ts`, not `.tsx`, is correct for `runtimeConfig.ts`.** `.tsx` only enables
+> JSX parsing, and this file exports a plain object. Four of the six files above
+> are named `.tsx` while containing no JSX at all (`authConst`, `apolloClient`,
+> `countryService`, `calendarService`) — that is an existing habit in this repo,
+> not a convention to match.
+
+Then the ConfigMap — **`helm-pjx/templates/pjx-web-config.yaml`**:
 
 ```yaml
 apiVersion: v1
@@ -456,7 +534,21 @@ data:
     };
 ```
 
-mounted as a `subPath` volume over `/usr/share/nginx/html/config.js`.
+> 🛑 **It must be under `templates/`.** Helm renders **only** files in
+> `templates/`; anything else in the chart root is inert. A `ConfigMap.yaml` in
+> `helm-pjx/` is never created and its `{{ .Values… }}` placeholders never expand
+> — with **no warning and no error**. This happened on 2026-09-07. Check with:
+>
+> ```bash
+> helm template pjx-test helm-pjx/ -f helm-pjx/environments/local.yaml | grep -c PJX_CONFIG
+> ```
+>
+> `0` means the file is in the wrong place. Also match the chart's naming — every
+> other template is lowercase `pjx-*.yaml`:
+>
+> ```bash
+> git mv helm-pjx/ConfigMap.yaml helm-pjx/templates/pjx-web-config.yaml
+> ```
 
 > **This changes the OIDC URLs again.** Phase 7 moved the ingress to path-based
 > routing on one host, so the issuer becomes `https://demo.pjx.example.com/auth`,
@@ -464,13 +556,114 @@ mounted as a `subPath` volume over `/usr/share/nginx/html/config.js`.
 > same exact-match discipline as Phase 2 step 5, with the same failure mode if
 > they drift.
 
-### Also: the production image is stale
+### Step 3b — Mount it, and make the port a value
 
-`projects/pjx-web-react/Dockerfile` builds on `node:14.5.0-slim` and serves from
-`nginx:1.19.0`. Both are long past end of life, and this is the image going to
-AKS. Bump to `node:18-alpine` and `nginx:1.27-alpine` while you are editing it —
-and re-run `validate.sh build pjx-web-react`, since `react-scripts` 3.4.3 is
-sensitive to the Node version (see Phase 6).
+**Still outstanding as of 2026-09-07.** The ConfigMap existing is not enough:
+`helm-pjx/templates/pjx-web-react.yaml` has **no `volumes:` or `volumeMounts:` at
+all**, so nothing reaches the pod. And its port is wrong for the production image:
+
+| Line | Currently | Should be |
+|---|---|---|
+| 25 | `containerPort` block | a value |
+| 30 | `port: 3000` — readiness probe | a value |
+| 36 | `port: 3000` — liveness probe | a value |
+| 51 | `port: 3000` — Service | a value |
+
+`3000` is the CRA dev server. The production image serves from **nginx on 80**.
+Deploy a CI-built image against today's chart and React returns **502** — the same
+failure Phase 7b hit from the opposite direction.
+
+These are **one change**, because a `subPath` mount over nginx's webroot only
+makes sense for the production image. Doing the mount without the port leaves the
+service unreachable; doing the port without the mount leaves it unconfigured.
+
+Add to `values.yaml`:
+
+```yaml
+web:
+  service:
+    port: 80          # production nginx
+```
+
+and to `environments/local.yaml`, while the cluster still runs dev images:
+
+```yaml
+web:
+  service:
+    port: 3000        # CRA dev server
+```
+
+Then replace all four hardcoded `3000`s with `{{ .Values.web.service.port }}`, and
+add the mount to the pod spec:
+
+```yaml
+        volumeMounts:
+          - name: web-config
+            mountPath: /usr/share/nginx/html/config.js
+            subPath: config.js
+      volumes:
+        - name: web-config
+          configMap:
+            name: pjx-web-config
+```
+
+`subPath` is what makes this replace **one file** rather than masking the whole
+directory — without it the mount hides every other file in nginx's webroot,
+including `index.html`, and the app serves nothing.
+
+> **Guard the mount for dev images.** The dev image is `react-scripts start`, which
+> has no `/usr/share/nginx/html`. Either gate the volume on a value
+> (`{{- if .Values.web.service.useNginx }}`) or accept that `local.yaml` and the
+> deployed values diverge here. This is the same
+> [dev-images-in-the-cluster](README.md#deferred-work) problem, surfacing again.
+
+`stdin: true` / `tty: true` can also come off the React pod once it is nginx — they
+exist only because `react-scripts start` exits when stdin closes.
+
+### Step 3c — Warn when `config.js` fails to load
+
+**Still outstanding as of 2026-09-07.** The `?? process.env.REACT_APP_*` fallback
+in `runtimeConfig.ts` keeps local development working, but it also means the
+build-time URLs stay **baked into the bundle** — verified: `sso.pjx.test` is
+present in `build/static/js/main.*.chunk.js`.
+
+So if the ConfigMap is missing, misnamed, or `config.js` 404s in the deployed
+environment, the app **does not fail loudly**. It silently uses
+`https://sso.pjx.test`, and you debug it through confusing CORS and OIDC errors
+instead of a clear "no configuration" signal.
+
+```typescript
+// src/utils/runtimeConfig.ts
+if (!(window as any).__PJX_CONFIG__) {
+  console.warn('[pjx] config.js did not load — falling back to build-time values');
+}
+```
+
+Cheap, and it converts a half-hour of misdirected CORS debugging into one console
+line. Worth doing before the first AKS deploy, not after.
+
+### Also: the serve stage is still stale
+
+The builder stage is on `node:18-slim` as of Phase 7c. **`nginx:1.19.0` (2020) is
+not** — and that is the layer actually shipped to AKS. Bump it while you are
+editing the file:
+
+```dockerfile
+FROM nginx:1.27-alpine
+```
+
+Then `docker build -t pjx-prod-pjx-web-react:test projects/pjx-web-react` to
+confirm the static output still serves. This is a serve-stage-only change, so it
+cannot affect the `react-scripts` build — but re-run
+`CI=true ./local/scripts/validate.sh build pjx-web-react` anyway, since that is
+what CI gates on.
+
+Note this is also where the **React Service port** must become a chart value:
+`helm-pjx/templates/pjx-web-react.yaml` hardcodes `3000` (the CRA dev server) at
+lines 30, 36, 51 and 52, while this production image serves on **80**. Deploy a
+CI-built image against today's chart and React returns 502. Both belong in the
+same change — see the callout at the end of
+[Phase 7c Step 0](phase-7c-cicd.md#step-0--fix-the-production-dockerfiles-first).
 
 ---
 

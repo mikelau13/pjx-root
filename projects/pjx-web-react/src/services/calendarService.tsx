@@ -1,5 +1,6 @@
 import { stringify } from 'querystring';
 import UserSubmitUtility from '../utils/userSubmitUtility';
+import { config } from '../utils/runtimeConfig';
 
 export type EventDeleteProps = {
   eventId?: number
@@ -19,7 +20,7 @@ export type EventApiResult = {
   end?: string
 };
 
-const baseUrl = `${process.env.REACT_APP_API_DOTNET_URL}/api/calendar/event`;
+const baseUrl = `${config.apiDotnetUrl}/api/calendar/event`;
 
 export default class CalendarService extends UserSubmitUtility {
     accessToken?: string;
