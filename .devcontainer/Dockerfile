@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libnss3-tools \
     && chmod +x /usr/local/bin/mkcert
 
 
-# Azure CLI + kubelogin + kubectl. Required from Phase 9 onward.
+# Azure CLI + kubelogin + kubectl. Required from Azure Foundation onward.
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && az aks install-cli
 
 # ================== KUBERNETES TOOLCHAIN =================

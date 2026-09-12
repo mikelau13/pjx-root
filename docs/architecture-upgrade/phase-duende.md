@@ -1,4 +1,8 @@
-# Phase 8 — Migrate SSO to Duende IdentityServer
+# Duende phase — Migrate SSO to Duende IdentityServer
+
+> **Executes 14th and last** — after [AKS Deploy](phase-aks-deploy.md), and it
+> is optional. This phase is named rather than numbered; see the
+> [README](README.md#progress).
 
 **Goal:** move `pjx-sso-identityserver` off the archived IdentityServer4 onto a
 supported OIDC library, and onto `net8.0`.
@@ -9,9 +13,10 @@ supported OIDC library, and onto `net8.0`.
 **Reversible:** on its branch.
 
 **Depends on:** Phase 4 (API side already on `net8.0` and free of IS4) and
-**Phase 11** — this phase runs *last*, after the AKS deployment is working.
+[AKS Deploy](phase-aks-deploy.md) — this phase runs *last*, after the AKS
+deployment is working.
 
-> **Ordering note.** This phase keeps the number 8 but executes after Phase 11.
+> **Ordering note.** This phase executes after [AKS Deploy](phase-aks-deploy.md).
 > Decision D5 makes the first AKS demo **IP-restricted**, so the unpatched
 > `netcoreapp3.1` SSO container is not internet-facing and this migration is not
 > a prerequisite for deploying anything. That was the point of choosing the
@@ -20,7 +25,7 @@ supported OIDC library, and onto `net8.0`.
 > see the end of this document.
 
 ```bash
-git checkout -b feature/arch-phase-8-duende
+git checkout -b feature/arch-duende
 ```
 
 ---
@@ -37,7 +42,7 @@ What makes it stop being reasonable:
 
 | Trigger | Why it matters |
 |---|---|
-| **Making the demo public** | `mcr.microsoft.com/dotnet/aspnet:3.1` left support in December 2022, on Debian 10 (past LTS). Unpatched runtime *and* base OS, reachable from the internet. The Phase 9 IP allowlist is what defers this |
+| **Making the demo public** | `mcr.microsoft.com/dotnet/aspnet:3.1` left support in December 2022, on Debian 10 (past LTS). Unpatched runtime *and* base OS, reachable from the internet. The Azure Foundation IP allowlist is what defers this |
 | **A new advisory** against IS4 or its transitive dependencies | It will never be fixed — 4.1.2 is the final release |
 | **Wanting SSO telemetry** | Current OpenTelemetry packages target `net6.0`+, so the auth hop stays dark in Grafana ([Phase 5](phase-5-otel.md)) |
 | **CI scanning noise** | Phase 7c's GHCR/Dependabot scanning flags the 3.1 image on every run, permanently |
@@ -234,7 +239,7 @@ exactly the kind of thing that passes a build and fails at runtime.
 
 ```bash
 git checkout master
-git branch -D feature/arch-phase-8-duende
+git branch -D feature/arch-duende
 ```
 
 Accounts dropped in step 4 do not come back — re-run the old `SeedData` on the
@@ -264,7 +269,7 @@ Before you do this, confirm all three are true:
 
 - [ ] No `netcoreapp3.1` images anywhere (`grep -rn 'aspnet:3.1' projects/`)
 - [ ] `dotnet list package --vulnerable --include-transitive` is clean for every project
-- [ ] The signing certificate comes from Key Vault, and nothing in git history is in use ([Phase 10](phase-10-deployable.md) step 1)
+- [ ] The signing certificate comes from Key Vault, and nothing in git history is in use ([Deployable](phase-deployable.md) step 1)
 
 Opening the demo while any of those is false undoes the reasoning that made the
 deferral safe.

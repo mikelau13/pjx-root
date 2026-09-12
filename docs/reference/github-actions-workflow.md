@@ -109,7 +109,7 @@ env:
 ```
 
 Available to every job and step as `${{ env.REGISTRY }}`. One place to change if
-you ever move to Azure Container Registry — which Phase 10 will.
+you ever move to Azure Container Registry — which Deployable will.
 
 ### `jobs.test` — does it still compile?
 
@@ -404,7 +404,7 @@ Worth stating, because the name "CI/CD" suggests otherwise:
 
 | Not here | Where it lives |
 |---|---|
-| Deploying to a cluster | Phase 10 — nothing in `build.yml` touches Kubernetes |
+| Deploying to a cluster | Deployable — nothing in `build.yml` touches Kubernetes |
 | Packaging the Helm chart | `chart.yml`, a separate file on the tag trigger |
 | Updating dependencies | Dependabot — a **service**, not a workflow |
 | Running the app | nothing; images are built and stored, never started |

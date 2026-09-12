@@ -12,7 +12,7 @@ The Node and React work can be done before Phase 4.
 
 > **`pjx-sso-identityserver` is out of scope for this phase.** Per Decision D2 it
 > stays on `netcoreapp3.1`, and current OpenTelemetry packages target `net6.0`+.
-> Its instrumentation is [Phase 8 step 5](phase-8-duende.md#step-5--now-add-telemetry).
+> Its instrumentation is [Duende step 5](phase-duende.md#step-5--now-add-telemetry).
 > Practical effect: you can trace a request from React through Apollo to the Node
 > API and through the .NET API's token *validation*, but token *issuance* and the
 > login flow produce no spans.
@@ -37,7 +37,7 @@ Phase 3), do **5a** now for an early payoff, and **5b** after Phase 4.
 | **5a** | `pjx-api-node`, `pjx-graphql-apollo` | nothing |
 | **5b** | `pjx-api-dotnet` | Phase 4 |
 | **5c** | `pjx-web-react` (browser telemetry) | nothing; lowest value, do last |
-| — | `pjx-sso-identityserver` | **Phase 8** — see the note above |
+| — | `pjx-sso-identityserver` | **Duende** — see the note above |
 
 ---
 
@@ -92,7 +92,7 @@ docker compose -f docker-compose.devcontainer.yml config > /dev/null && echo "YA
 The Node and React SDKs ignore this var — `telemetry.ts` builds
 `OTLPTraceExporter` with an explicit `${endpoint}/v1/traces` URL. It is set on all
 five anyway to keep one uniform OTel block per service, and so
-`pjx-sso-identityserver` is already correct when Phase 8 instruments it.
+`pjx-sso-identityserver` is already correct when Duende instruments it.
 
 ### Confirm before writing any code
 
@@ -140,7 +140,7 @@ matching the container name minus the `-dev` suffix:
 | pjx-graphql-apollo | `pjx-graphql-apollo` |
 | pjx-api-dotnet | `pjx-api-dotnet` |
 | pjx-web-react | `pjx-web-react` |
-| pjx-sso-identityserver | `pjx-sso-identityserver` (reserved — Phase 8) |
+| pjx-sso-identityserver | `pjx-sso-identityserver` (reserved — Duende) |
 
 Set it via the standard env var rather than in code, so it stays declarative:
 
@@ -469,7 +469,7 @@ reference.
 > aware it is chatty if you ever point this at a real database.
 
 **Do not repeat this for `projects/pjx-sso-identityserver`.** It is on
-`netcoreapp3.1` and these packages will not install. Phase 8 picks it up once the
+`netcoreapp3.1` and these packages will not install. Duende picks it up once the
 framework moves.
 
 ---
@@ -499,7 +499,7 @@ spans from 5a and 5b already cover the request path end to end.
 ## Step 5d — Health checks
 
 Grouped here because it edits the same startup code as the OTel work — same
-files, same rebuild. Moved forward from Phase 10, where it was blocking a local
+files, same rebuild. Moved forward from Deployable, where it was blocking a local
 Kubernetes deploy for no good reason.
 
 ### What already exists
@@ -583,13 +583,13 @@ SERVICE_HEALTH=(
 `/health/ready` on the .NET API replaces `/swagger`, which returned a 302 and told
 you nothing about whether the app could actually serve requests.
 
-### Why now rather than in Phase 10
+### Why now rather than in Deployable
 
 [Phase 7b](phase-7b-local-k8s.md) deploys to a local cluster, and its Helm
 templates declare probes. Declaring probes against endpoints that do not exist
 yet means debugging restart loops on your first Kubernetes deploy. Doing the
 endpoints here means they are already proven under compose before Kubernetes ever
-sees them. Phase 10 keeps only resource requests and limits.
+sees them. Deployable keeps only resource requests and limits.
 
 ---
 
@@ -669,7 +669,7 @@ empty legend label, which is the cosmetic cost.
 `pjx-web-react` is a browser app with no server-side HTTP metrics (that is
 [Step 5c](#step-5c--react-browser-telemetry-optional), recommended skipped), and
 `pjx-sso-identityserver` stays uninstrumented on `netcoreapp3.1` until
-[Phase 8](phase-8-duende.md). Both absences are correct.
+[Duende](phase-duende.md). Both absences are correct.
 
 ### Provision it
 
@@ -745,7 +745,7 @@ single trace from React through Apollo to the Node API, and through the .NET
 API's token validation on `/country/all`.
 
 Expect a **gap where the SSO redirect happens** — that service is uninstrumented
-until Phase 8. The trace resumes once the token reaches the .NET API. That gap is
+until Duende. The trace resumes once the token reaches the .NET API. That gap is
 the expected shape, not a broken trace context.
 
 ---
@@ -804,7 +804,7 @@ sits with the log pipeline below: telemetry *depth*, revisited after the
 Kubernetes work.
 
 Do not confuse this with the two expected gaps —
-[SSO is uninstrumented until Phase 8](phase-8-duende.md) and
+[SSO is uninstrumented until Duende](phase-duende.md) and
 [EF spans need EF Core 8](phase-4-dotnet8.md#it-is-now-blocking-not-merely-stale).
 Those are known and intended. This one is a defect.
 

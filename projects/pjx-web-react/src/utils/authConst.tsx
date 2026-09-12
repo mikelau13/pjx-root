@@ -3,7 +3,7 @@ import { config } from './runtimeConfig';
 // Read from runtime configuration, not build-time substitution. In a deployed
 // environment public/config.js is replaced by a ConfigMap mounted over
 // /usr/share/nginx/html/config.js, so these URLs change without rebuilding the
-// image — see docs/architecture-upgrade/phase-10-deployable.md Step 3.
+// image — see docs/architecture-upgrade/phase-deployable.md Step 3.
 const issuer = config.ssoIssuerUrl;
 const publicUrl = config.publicUrl;
 

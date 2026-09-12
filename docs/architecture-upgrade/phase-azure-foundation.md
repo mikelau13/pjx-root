@@ -1,4 +1,8 @@
-# Phase 9 — Azure foundation
+# Azure Foundation phase
+
+> **Executes 12th of 14** — after [Deployable](phase-deployable.md), before
+> [AKS Deploy](phase-aks-deploy.md). This phase is named rather than numbered;
+> see the [README](README.md#progress).
 
 **Goal:** provision the Azure resources pjx needs — ACR, AKS, PostgreSQL, Key
 Vault, DNS — plus the in-cluster controllers (Traefik, cert-manager, Secrets
@@ -11,16 +15,16 @@ the cost section before running anything.
 
 **Depends on:** [Phase 7c](phase-7c-cicd.md) (images in GHCR) and [Phase 7b](phase-7b-local-k8s.md) — the chart should already deploy successfully on a local cluster before you provision a paid one.
 
-> **Run [Phase 10](phase-10-deployable.md) first.** Nothing here technically
+> **Run [Deployable](phase-deployable.md) first.** Nothing here technically
 > requires it, but the billing meter starts the moment this phase completes, and
-> Phase 10 is the largest block of application work left. Provisioning Azure and
+> Deployable is the largest block of application work left. Provisioning Azure and
 > then spending weeks on `Startup.cs` means paying ~$60–70/month for idle
-> infrastructure. Phase 10 is almost entirely local work provable on k3d — only
+> infrastructure. Deployable is almost entirely local work provable on k3d — only
 > two tails need Key Vault, and they are quick once it exists. Come here when the
 > deploy is days away, not weeks.
 
 ```bash
-git checkout -b feature/arch-phase-9-azure-foundation
+git checkout -b feature/arch-azure-foundation
 ```
 
 ---
@@ -33,7 +37,7 @@ git checkout -b feature/arch-phase-9-azure-foundation
 | Database | **Azure Database for PostgreSQL Flexible Server**, Burstable |
 | Ingress | **Traefik**, for parity with local dev (Phase 2) |
 | TLS | cert-manager + Let's Encrypt, **DNS-01** — see the note below |
-| Access | **IP-restricted**, which keeps [Phase 8](phase-8-duende.md) optional |
+| Access | **IP-restricted**, which keeps [Duende](phase-duende.md) optional |
 | Observability | **Grafana Cloud free tier** — nothing monitoring-related deployed in-cluster |
 
 ### Why DNS-01 and not HTTP-01
@@ -48,7 +52,7 @@ which proves domain control via a TXT record and needs no inbound reachability a
 all. It also enables wildcard certificates if you ever want per-subdomain
 routing back.
 
-If you later remove the IP restriction (the last step of Phase 8), HTTP-01
+If you later remove the IP restriction (the last step of Duende), HTTP-01
 becomes available — but there is no reason to switch back.
 
 ---
@@ -200,7 +204,7 @@ managed identity gets `AcrPull`, so no registry credentials exist in the cluster
 at all.
 
 `--enable-addons azure-keyvault-secrets-provider` installs the Secrets Store CSI
-driver that Phase 10 uses for the signing certificate.
+driver that Deployable uses for the signing certificate.
 
 ---
 
@@ -229,7 +233,7 @@ az postgres flexible-server create \
   --public-access None \
   --yes
 
-# Two databases, matching the two SQLite files being replaced in Phase 10.
+# Two databases, matching the two SQLite files being replaced in Deployable.
 az postgres flexible-server db create -g "${RG}" -s "${PG}" -d pjx_calendar
 az postgres flexible-server db create -g "${RG}" -s "${PG}" -d pjx_identity
 
@@ -255,7 +259,7 @@ az postgres flexible-server firewall-rule create -g "${RG}" -s "${PG}" \
 > Decide deliberately rather than by default.
 
 You need the `allow-me` rule to run EF migrations from the devcontainer in
-Phase 10.
+Deployable.
 
 ---
 
@@ -304,7 +308,7 @@ CLIENT_ID="$(az aks show -g "${RG}" -n "${AKS}" \
 az role assignment create --assignee "${CLIENT_ID}" \
   --role "Key Vault Secrets User" --scope "${KV_ID}"
 
-echo "CSI driver client id: ${CLIENT_ID}"   # Phase 10's SecretProviderClass needs this
+echo "CSI driver client id: ${CLIENT_ID}"   # Deployable's SecretProviderClass needs this
 ```
 
 Seed the secrets. **Everything here is generated, never reused from the repo:**
@@ -324,10 +328,10 @@ az keyvault secret set --vault-name "${KV}" --name otlp-endpoint --value "<https
 az keyvault secret set --vault-name "${KV}" --name otlp-headers  --value "Authorization=Basic <base64 instanceID:token>"
 ```
 
-> The token signing certificate is **not** set here. Phase 10 generates a fresh
+> The token signing certificate is **not** set here. Deployable generates a fresh
 > one and loads it, because the certificate currently in the repo is public and
 > must never reach a deployed environment. See
-> [Phase 10](phase-10-deployable.md).
+> [Deployable](phase-deployable.md).
 
 ---
 
@@ -354,7 +358,7 @@ kubectl -n traefik get svc traefik -w    # wait for EXTERNAL-IP
 ```
 
 `loadBalancerSourceRanges` is the whole IP restriction — one setting, and it is
-what keeps Phase 8 optional. To add collaborators, append their CIDRs.
+what keeps Duende optional. To add collaborators, append their CIDRs.
 
 Then point DNS at it:
 
@@ -479,7 +483,7 @@ kubectl describe certificate test-cert    # → Ready=True within ~2 minutes
 
 Check 5 is the one that matters. An allowlist you believe is applied but is not
 is worse than no allowlist, because it silently invalidates the reasoning that
-keeps Phase 8 optional. Test it from a genuinely different network.
+keeps Duende optional. Test it from a genuinely different network.
 
 Only switch the `ClusterIssuer` to `acme-v02` once check 7 passes on staging.
 

@@ -67,14 +67,14 @@ Tempting, and it breaks the React app. Its production image bakes `REACT_APP_*`
 values at **build** time, so the bundle contains `https://pjx.test` with port 443
 implied. Served on `:8443`, the SPA loads but every API call goes to the wrong
 port — and you would be debugging
-[Phase 10's runtime-config problem](phase-10-deployable.md#step-3--react-runtime-configuration)
-before reaching Phase 10.
+[Deployable's runtime-config problem](phase-deployable.md#step-3--react-runtime-configuration)
+before reaching Deployable.
 
 With k3d on 80/443, your existing `/etc/hosts` entries and mkcert certificate
 work unchanged and the app behaves exactly as it does under Compose. The cost is
 that the two stacks are mutually exclusive, which is the right trade here.
 
-Once Phase 10 lands runtime configuration, running both on different ports
+Once Deployable lands runtime configuration, running both on different ports
 becomes viable — revisit then if you want side-by-side comparison.
 
 ---
@@ -254,7 +254,7 @@ global:
 # repository here rather than in values.yaml — the prefix is an artifact of local
 # Compose builds and would be wrong for GHCR and ACR.
 #
-# SQLite is ephemeral and single-writer, so one replica each until Phase 10
+# SQLite is ephemeral and single-writer, so one replica each until Deployable
 # replaces it with PostgreSQL. values.yaml sets web.replicas to 2, so that
 # override is load-bearing.
 web:       { replicas: 1, image: { repository: pjx-root-pjx-web-react } }
@@ -342,7 +342,7 @@ service, using each one's own path and container port:
 > ingress instead. Check `kubectl logs` rather than trusting `READY 1/1`.
 >
 > `pjx-sso-identityserver` keeps its database check, so its probe is the more
-> meaningful of the two. [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql)
+> meaningful of the two. [Deployable Step 0](phase-deployable.md#step-2--sqlite--postgresql)
 > restores the API's.
 
 ---
@@ -428,15 +428,15 @@ done
 code from `kubectl -n pjx logs -l app=pjx-sso --tail=50`), log in,
 `/country/all`, `/cities`, sign out.
 
-That full pass is the point of this phase. Passing it locally means Phase 11's
+That full pass is the point of this phase. Passing it locally means AKS Deploy's
 AKS deploy is "the same thing, elsewhere" rather than a first attempt.
 
 ### Expect these, do not debug them
 
 - **Data vanishes on pod restart.** SQLite in an ephemeral container.
-  [Phase 10](phase-10-deployable.md) replaces it with PostgreSQL.
+  [Deployable](phase-deployable.md) replaces it with PostgreSQL.
 - **The signing certificate is the committed one.** Insecure, local only — also
-  Phase 10.
+  Deployable.
 - **No telemetry reaches Grafana** unless you point
   `OTEL_EXPORTER_OTLP_ENDPOINT` at something reachable from the cluster. The
   Compose Grafana is on `pjx-network`, which k3s pods are not.

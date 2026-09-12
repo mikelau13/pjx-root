@@ -50,7 +50,7 @@ projects/**/.eslintcache
 projects/**/*.db
 # The .NET API's seeded SQLite database is a required build input —
 # projects/pjx-api-dotnet/Dockerfile COPYs it, and nothing in the app
-# creates or migrates it. Replaced by PostgreSQL in Phase 10.
+# creates or migrates it. Replaced by PostgreSQL in Deployable.
 !projects/pjx-api-dotnet/src/Pjx_Api/PjxCalendar.db
 projects/**/*.db-shm
 projects/**/*.db-wal

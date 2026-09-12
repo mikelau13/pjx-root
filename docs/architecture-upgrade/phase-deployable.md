@@ -1,4 +1,8 @@
-# Phase 10 — Make the application deployable
+# Deployable phase — Make the application deployable
+
+> **Executes 11th of 14** — after [7c](phase-7c-cicd.md), before
+> [Azure Foundation](phase-azure-foundation.md). This phase is named rather than
+> numbered; see the [README](README.md#progress).
 
 **Goal:** close the gaps between "runs in Docker Compose on localhost" and "runs
 in Kubernetes" — PostgreSQL, real secrets, health probes, resource limits, and
@@ -10,9 +14,9 @@ after Phase 4.
 **Reversible:** yes, but the database migration is one-way in practice.
 
 **Depends on:** [Phase 7b](phase-7b-local-k8s.md) (a local cluster to prove the
-changes against). **Not Phase 9** — most of this phase is local work.
+changes against). **Not Azure Foundation** — most of this phase is local work.
 
-> **Ordering — corrected.** This line previously read *"Depends on: Phase 9
+> **Ordering — corrected.** This line previously read *"Depends on: Azure Foundation
 > (Azure resources must exist)"*, which would have you provisioning ~$60–70/month
 > of Azure and then leaving it idle for weeks of application work. Only two tails
 > of this phase actually touch Azure:
@@ -25,14 +29,14 @@ changes against). **Not Phase 9** — most of this phase is local work.
 > | 5 — resource requests and limits | no |
 > | 6 — observability wiring | **only the tail** — Grafana Cloud's auth header is read from Key Vault; Grafana Cloud itself is free tier, not Azure |
 >
-> **Run the local work first, on k3d, with production images.** Provision Phase 9
+> **Run the local work first, on k3d, with production images.** Provision Azure Foundation
 > when you are days from deploying, then come back for the two tails and go
-> straight into [Phase 11](phase-11-deploy.md). The original ordering predates
+> straight into [AKS Deploy](phase-aks-deploy.md). The original ordering predates
 > Phase 7 being split into 7/7b/7c, which is what gave this project a local
 > cluster to develop against.
 
 ```bash
-git checkout -b feature/arch-phase-10-deployable
+git checkout -b feature/arch-deployable
 ```
 
 ---
@@ -50,10 +54,10 @@ free work first:
 | 3 | [Step 5](#step-5--resource-requests-and-limits) — resource requests and limits | no |
 | 4 | [Step 1c](#step-1c--one-small-code-change-no-azure-needed) — the `Path.IsPathRooted` edit, on its own | no |
 | 5 | [Step 2](#step-2--sqlite--postgresql) — SQLite → PostgreSQL against `postgres:16-alpine` | no |
-| — | **[Phase 9](phase-9-azure-foundation.md) — provision Azure here** | — |
+| — | **[Azure Foundation](phase-azure-foundation.md) — provision Azure here** | — |
 | 6 | [Step 1a](#step-1a--generate-and-store-after-phase-9) + [Step 1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9) — store the certificate and mount it | **yes** |
 | 7 | [Step 6](#step-6--observability-wiring) — the Grafana Cloud header comes from Key Vault | **yes** |
-| — | [Phase 11](phase-11-deploy.md) — deploy | — |
+| — | [AKS Deploy](phase-aks-deploy.md) — deploy | — |
 
 Steps 1a, 1b and 7 are quick once Key Vault exists, and 1b cannot be *tested*
 before then regardless — the CSI driver only runs in AKS.
@@ -84,9 +88,9 @@ vulnerability rather than an operational gap.
 > ([Step 1c](#step-1c--one-small-code-change-no-azure-needed)) need nothing.
 > Storing the certificate ([1a](#step-1a--generate-and-store-after-phase-9)) and
 > mounting it ([1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9)) require
-> Key Vault, so they run **after [Phase 9](phase-9-azure-foundation.md)**. Note
+> Key Vault, so they run **after [Azure Foundation](phase-azure-foundation.md)**. Note
 > that `local/scripts/azure/00-vars.sh` — which 1a sources for `${KV}` — is
-> created by [Phase 9 Step 1](phase-9-azure-foundation.md#step-1--naming-and-a-script-to-hold-it)
+> created by [Azure Foundation Step 1](phase-azure-foundation.md#step-1--naming-and-a-script-to-hold-it)
 > and does not exist yet.
 
 ### Understand what cannot be undone
@@ -103,7 +107,7 @@ permanently compromised and never use it anywhere but localhost.**
 So: generate a new one, keep it out of git entirely, and leave the old one alone
 or delete it as tidying — not as remediation.
 
-### Step 1a — Generate and store (**after Phase 9**)
+### Step 1a — Generate and store (**after Azure Foundation**)
 
 > Requires Key Vault. Skip on a first pass through this phase.
 
@@ -131,7 +135,7 @@ shred -u /tmp/sso-signing.key /tmp/sso-signing.crt /tmp/sso-signing.pfx
 > it does not authenticate a TLS endpoint. It never needs to be CA-issued. Its
 > only consumer is the API validating tokens via the discovery document's JWKS.
 
-### Step 1b — Mount it via the CSI driver (**after Phase 9**)
+### Step 1b — Mount it via the CSI driver (**after Azure Foundation**)
 
 > The template below is guarded by `{{- if .Values.keyVault.enabled }}`, so it is
 > safe to add early — with the flag false it renders to nothing and `helm
@@ -252,7 +256,7 @@ Both .NET projects. `pjx-api-node` has no datastore and needs nothing.
 > Except here it is on the critical path — the provider swap *is* the phase.
 >
 > ```bash
-> git checkout -b feature/arch-phase-10-deployable   # EF upgrade lands here as step 0
+> git checkout -b feature/arch-deployable   # EF upgrade lands here as step 0
 > ```
 >
 > Upgrade `Microsoft.EntityFrameworkCore.Sqlite`, `.Design` and `.Tools` to
@@ -271,7 +275,7 @@ Both .NET projects. `pjx-api-node` has no datastore and needs nothing.
 > [EF query spans in Grafana](phase-5-otel.md#step-5b--net-services-after-phase-4),
 > and `AddDbContextCheck` on the API's readiness probe — which
 > [Phase 5 had to remove](phase-4-dotnet8.md#it-is-now-blocking-not-merely-stale)
-> and which [Phase 11](phase-11-deploy.md) wants before production traffic.
+> and which [AKS Deploy](phase-aks-deploy.md) wants before production traffic.
 >
 > `dotnet-ef` also becomes usable: the tool is pinned to 8.x in
 > [Phase 6](phase-6-devcontainer-image.md), and it cannot operate on an EF Core
@@ -302,7 +306,7 @@ dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL --version 3.1.*
 
 > **Verify this resolves before going further.** If the 3.1-compatible Npgsql
 > provider cannot be installed alongside IS4, that is a hard signal to pull
-> [Phase 8](phase-8-duende.md) forward — the framework, not the database, is the
+> [Duende](phase-duende.md) forward — the framework, not the database, is the
 > blocker. Establish it now rather than mid-migration.
 
 ### Regenerate migrations
@@ -312,7 +316,7 @@ Provider-specific SQL means the SQLite migrations cannot be reused:
 ```bash
 rm -rf Migrations/
 dotnet ef migrations add InitialPostgres
-dotnet ef database update    # against Azure, using the allow-me firewall rule from Phase 9
+dotnet ef database update    # against Azure, using the allow-me firewall rule from Azure Foundation
 ```
 
 ### Expect these differences
@@ -727,7 +731,7 @@ for Traefik, cert-manager, the CSI driver, and kube-system.
 
 ## Step 6 — Observability wiring
 
-> **Partly after Phase 9.** The exporter configuration and the env-var
+> **Partly after Azure Foundation.** The exporter configuration and the env-var
 > plumbing are local work. The Grafana Cloud auth header is read from Key
 > Vault, so that half waits — see the
 > [order table](#suggested-order-within-this-phase).
@@ -736,7 +740,7 @@ for Traefik, cert-manager, the CSI driver, and kube-system.
 Phase 5 made the exporter conditional on `OTEL_EXPORTER_OTLP_ENDPOINT`. Two
 additions:
 
-**Grafana Cloud** needs an auth header, which Phase 9 stored in Key Vault and
+**Grafana Cloud** needs an auth header, which Azure Foundation stored in Key Vault and
 step 1's `SecretProviderClass` projects as `OTEL_EXPORTER_OTLP_HEADERS`. The
 OpenTelemetry SDKs read it natively — no code change.
 
@@ -816,7 +820,7 @@ most likely to have broken something a build cannot catch.
 
 ```bash
 git checkout master
-git branch -D feature/arch-phase-10-deployable
+git branch -D feature/arch-deployable
 ```
 
 The Azure-side changes do not revert with git:

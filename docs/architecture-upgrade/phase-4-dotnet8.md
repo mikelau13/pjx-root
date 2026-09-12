@@ -5,7 +5,7 @@ IdentityServer4 dependency. The SSO server deliberately stays on
 `netcoreapp3.1`.
 
 **Risk:** Medium. No auth-stack replacement in this phase — that is
-[Phase 8](phase-8-duende.md), optional and pre-production.
+[Duende](phase-duende.md), optional and pre-production.
 
 **Reversible:** on its branch; keep it there until the manual browser test from
 Phase 2 passes again.
@@ -266,7 +266,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ```
 
 **Do not change `projects/pjx-sso-identityserver/Dockerfile*`.** It stays on 3.1
-until Phase 8.
+until Duende.
 
 ---
 
@@ -293,7 +293,7 @@ dotnet list package --vulnerable --include-transitive
 ```
 
 Paste that output into the commit message. It documents the deferral against
-real data, and re-running it later is how you decide when Phase 8 stops being
+real data, and re-running it later is how you decide when Duende stops being
 optional.
 
 ### No `validate.sh` change needed
@@ -309,7 +309,7 @@ So `validate.sh` keeps both .NET projects in `DOTNET_PROJECTS`, exactly as
 > One wrinkle when you get here: `dotnet restore` on the SSO project resolves
 > `IdentityServer4.AspNetIdentity` 4.1.2, published for `netcoreapp3.1` — the same
 > TFM the project already targets, so that is fine. Only when
-> [Phase 8](phase-8-duende.md) moves SSO to `net8.0` does the package have to go.
+> [Duende](phase-duende.md) moves SSO to `net8.0` does the package have to go.
 
 ---
 
@@ -430,7 +430,7 @@ devcontainer-and-infrastructure first, application bugs later.
    [Phase 5 Step 5b](phase-5-otel.md#step-5b--net-services-after-phase-4).
 2. **EF Core 3.1 is out of support** (December 2022), same as the pre-upgrade
    `netcoreapp3.1` runtime was. It is a genuine pre-production item, not
-   housekeeping — carry it into the [Phase 8](phase-8-duende.md) revisit alongside
+   housekeeping — carry it into the [Duende](phase-duende.md) revisit alongside
    the IdentityServer4 replacement.
 
 Do this on its own branch, not folded into another phase — the whole point is that
@@ -488,21 +488,21 @@ dependency against the EF Core version in use, not the project's
 | [5](phase-5-otel.md) | No EF spans. The .NET API's readiness check omits the database. | ✅ `AddDbContextCheck` restored; EF spans should now appear |
 | [6](phase-6-devcontainer-image.md) | The image pins `dotnet-ef` 8.x, which cannot operate on an EF Core 3.1 project — `dotnet ef migrations` fails. | ✅ resolved |
 | [7b](phase-7b-local-k8s.md) | The .NET API's readiness probe passes without proving the database is reachable. | ⚠️ partly — see the SQLite caveat below |
-| [10](phase-10-deployable.md) | **Hard blocker.** `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.\* requires EF Core 8 — the same mismatch, but on the critical path. | ✅ unblocked |
-| [8](phase-8-duende.md) | Already bumps SSO's EF Core to 8.0.x, so SSO is covered there. | unchanged — SSO stays on 3.1 |
-| [11](phase-11-deploy.md) | A pod can report Ready while its database is unreachable. Acceptable for a demo, not for production. | ⚠️ see below |
+| [Deployable](phase-deployable.md) | **Hard blocker.** `Npgsql.EntityFrameworkCore.PostgreSQL` 8.0.\* requires EF Core 8 — the same mismatch, but on the critical path. | ✅ unblocked |
+| [Duende](phase-duende.md) | Already bumps SSO's EF Core to 8.0.x, so SSO is covered there. | unchanged — SSO stays on 3.1 |
+| [AKS Deploy](phase-aks-deploy.md) | A pod can report Ready while its database is unreachable. Acceptable for a demo, not for production. | ⚠️ see below |
 
 > **The readiness probe is still weak, for a different reason.**
 > `AddDbContextCheck` calls `CanConnectAsync()`, and `Microsoft.Data.Sqlite` opens
 > in `ReadWriteCreate` mode by default — so it can create an empty database file
 > and report healthy. The check becomes meaningful once
-> [Phase 10 Step 2](phase-10-deployable.md#step-2--sqlite--postgresql) moves to
+> [Deployable Step 2](phase-deployable.md#step-2--sqlite--postgresql) moves to
 > PostgreSQL, where a connection failure is a real failure. Until then
 > `/health/ready` returning `Healthy` proves the process and the check pipeline
 > work, not that the data is there.
 
 **Recommendation was: do the upgrade as Step 0 of
-[Phase 10](phase-10-deployable.md).** That is what happened, though the PostgreSQL
+[Deployable](phase-deployable.md).** That is what happened, though the PostgreSQL
 switch was *not* folded in with it — Step 2 is deferred, so EF Core 8 was verified
 against SQLite on its own. That turned out to be the better split: the one LINQ
 regression was unambiguously attributable, which was the whole point of doing this
@@ -512,8 +512,8 @@ separately.
 
 ### How it actually went (2026-09-07)
 
-Done on `feature/arch-phase-10-deployable` rather than a dedicated `fix/ef-core-8`
-branch, as the first item of Phase 10's local work. Three failures, in order.
+Done on `feature/arch-deployable` rather than a dedicated `fix/ef-core-8`
+branch, as the first item of Deployable's local work. Three failures, in order.
 
 **1. `CS1061: 'IConfigurationSection' does not contain a definition for 'GetValue'`**
 

@@ -270,7 +270,7 @@ more, and does not carry the API server.
 | | L4 | L7 |
 |---|---|---|
 | local k3d | `serverlb` (nginx) | Traefik |
-| [AKS](../architecture-upgrade/phase-11-deploy.md) | Azure Load Balancer | Traefik |
+| [AKS](../architecture-upgrade/phase-aks-deploy.md) | Azure Load Balancer | Traefik |
 
 `serverlb` is k3d simulating a cloud load balancer. On AKS it is replaced by a
 real one and Traefik stays — so the topology you debug locally is the topology you
@@ -360,7 +360,7 @@ ss -tln | grep -E ':(80|443) ' || echo "80/443 free"
 Mapping k3d to 8080/8443 to run both looks tempting and breaks the React app:
 `react-scripts` bakes `REACT_APP_*` into the bundle at **build** time, so the SPA
 loads but every API call targets port 443. That is
-[Phase 10's runtime-configuration problem](../architecture-upgrade/phase-10-deployable.md#step-3--react-runtime-configuration),
+[Deployable's runtime-configuration problem](../architecture-upgrade/phase-deployable.md#step-3--react-runtime-configuration),
 and not worth meeting early.
 
 ---

@@ -298,7 +298,7 @@ algorithm OpenSSL 3 rejects; the `start` script already carried the flag, but
 > `react-scripts ^3.4.3` (2020, end-of-life) and `typescript ^3.7.5` now compile
 > on Node 18 via a compatibility flag rather than because they support it, and
 > Stage 2's `nginx:1.19.0` is equally old. Tracked in the
-> [deferred-work table](../architecture-upgrade/README.md), owed before Phase 10.
+> [deferred-work table](../architecture-upgrade/README.md), owed before Deployable.
 
 ---
 

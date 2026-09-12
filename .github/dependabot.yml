@@ -5,6 +5,6 @@ updates:
     directory: /projects/pjx-sso-identityserver
     schedule: { interval: monthly }
     # netcoreapp3.1 base is a known deferral tracked in
-    # docs/architecture-upgrade/phase-8-duende.md. Revisit before any
+    # docs/architecture-upgrade/phase-duende.md. Revisit before any
     # public deployment.
     open-pull-requests-limit: 0
