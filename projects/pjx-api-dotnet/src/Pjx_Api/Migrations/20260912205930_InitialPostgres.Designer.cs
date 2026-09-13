@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pjx_Api.Data;
@@ -11,9 +12,11 @@ using Pjx_Api.Data;
 namespace Pjx_Api.Migrations
 {
     [DbContext(typeof(CalendarDbContext))]
-    partial class CalendarDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260912205930_InitialPostgres")]
+    partial class InitialPostgres
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

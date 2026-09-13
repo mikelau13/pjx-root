@@ -16,7 +16,6 @@ RUN dotnet build "pjx-api-dotnet.csproj" -c Release -o /app/build
 
 FROM build AS publish
 RUN dotnet publish "pjx-api-dotnet.csproj" -c Release -o /app/publish
-COPY /src/Pjx_Api/PjxCalendar.db /app/publish
 
 FROM base AS final
 WORKDIR /app

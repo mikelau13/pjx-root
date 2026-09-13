@@ -168,6 +168,14 @@ You execute the steps. This document is the instruction set, not a changelog.
   what Helm actually does with `values.yaml` and `_helpers.tpl`, and diagrams of
   the chart's routing and image resolution either side of Phase 7. Worth reading
   before Phase 7.
+- [**ConfigMaps, volumes and volumeMounts**](../reference/kubernetes-config-and-volumes.md) —
+  how a ConfigMap reaches a file inside a container, why a missing mount passes
+  every check and still serves the wrong config, and what `subPath` protects.
+  Worth reading before Deployable Step 3b.
+- [**Operating the stack: logs, shells and databases**](../reference/operating-the-stack.md) —
+  reading logs, getting a shell, and using `psql` against the two databases;
+  which commands belong to Compose and which to k3d, and why `kubectl` reports
+  `localhost:8080` refused when no cluster is running.
 
 ## Reference environment
 

@@ -62,7 +62,7 @@ namespace Pjx_Api
             });
 
             #region inject CalendarEvent conflict check
-            services.AddDbContext<CalendarDbContext>(options => options.UseSqlite(Configuration.GetConnectionString("DefaultConnection")));
+            services.AddDbContext<CalendarDbContext>(options => options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection")));
             services.AddTransient(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddCalendareEventRepository(Configuration.GetSection("CalendarEventDI"));
             #endregion

@@ -109,6 +109,17 @@ services:
       retries: 3
       start_period: 30s
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pjx
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pjx_calendar
+    volumes:
+      - pjx-pgdata:/var/lib/postgresql/data
+    networks: [pjx-network]
+
+
   pjx-api-node:
     labels:
       - "traefik.enable=true"
@@ -228,6 +239,8 @@ volumes:
   # deletes this and takes your Claude logins and session history with it.
   pjx-claude-config:
     name: pjx-claude-config
+  pjx-pgdata:
+    name: pjx-pgdata
 
 networks:
   pjx-network:

@@ -293,9 +293,23 @@ update `appsettings.json`:
 
 ```json
 "ConnectionStrings": {
-  "DefaultConnection": "Host=localhost;Database=pjx_calendar;Username=pjx;Password=password"
+  "DefaultConnection": "Host=postgres;Database=pjx_calendar;Username=pjx;Password=password"
 }
 ```
+
+> 🛑 **`Host=postgres`, not `Host=localhost`** (corrected 2026-09-12; this doc
+> said `localhost` and it does not work here). pjx runs
+> **docker-outside-of-docker**: the devcontainer is a *sibling* container on
+> `pjx-network`, so `localhost` inside it is its own loopback — not the host, and
+> not Postgres. `dotnet ef database update` fails with
+> `Npgsql.NpgsqlException: Failed to connect to 127.0.0.1:5432 ... Connection
+> refused`.
+>
+> The service name resolves over the compose network, and the same value works
+> from both the devcontainer and the `pjx-api-dotnet` container, since both join
+> `pjx-network`. This is the same boundary that forces
+> `extra_hosts: "pjx.test:host-gateway"` on the workspace service — see the
+> comment at `docker-compose.devcontainer.yml:10-12`.
 
 Repeat for `projects/pjx-sso-identityserver` — but note it is on
 `netcoreapp3.1` per Decision D2, so pin the provider to a compatible major:
@@ -304,20 +318,123 @@ Repeat for `projects/pjx-sso-identityserver` — but note it is on
 dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL --version 3.1.*
 ```
 
-> **Verify this resolves before going further.** If the 3.1-compatible Npgsql
-> provider cannot be installed alongside IS4, that is a hard signal to pull
-> [Duende](phase-duende.md) forward — the framework, not the database, is the
-> blocker. Establish it now rather than mid-migration.
+> **✅ Answered 2026-09-12: it resolves.** `Npgsql.EntityFrameworkCore.PostgreSQL
+> 3.1.*` installs and restores cleanly alongside IdentityServer4 on
+> `netcoreapp3.1`. The framework is not a blocker here, so
+> [Duende](phase-duende.md) stays deferred as planned.
+
+SSO needs three more things the API did not:
+
+1. **Its own database.** The compose service above only creates `pjx_calendar`
+   via `POSTGRES_DB`, matching the two SQLite files being replaced:
+
+   ```bash
+   docker exec pjx-root-postgres-1 psql -U pjx -d pjx_calendar \
+     -c 'CREATE DATABASE pjx_identity OWNER pjx;'
+   ```
+
+2. **Its connection string**, `projects/pjx-sso-identityserver/appsettings.json`,
+   which is still `"Data Source=AspIdUsers.db;"` →
+   `"Host=postgres;Database=pjx_identity;Username=pjx;Password=password"`.
+
+3. **Two `UseSqlite` call sites, not one** — `Startup.cs:55` *and*
+   `SeedData.cs:25`. Missing either one fails the build with `CS1061:
+   'DbContextOptionsBuilder' does not contain a definition for 'UseSqlite'`
+   once the Sqlite package is removed.
+
+> 🛑 **A failed SSO build shows up as a 404, not a 502.** `dotnet watch` exits on
+> the compile error, so nothing listens on port 80; Traefik's Docker provider
+> then registers **no router at all** for `sso.pjx.test`, and the browser gets
+> Traefik's own 19-byte "404 page not found" from the `/connect/authorize`
+> redirect. That reads like a misconfigured OIDC URL and is not — check
+> `docker logs pjx-sso-identityserver-dev` and
+> `curl -s http://127.0.0.1:9091/api/http/routers` before touching any client
+> configuration. A missing router means the container, not the URL.
+
+> **Existing users do not come across.** `AspIdUsers.db` holds the ASP.NET
+> Identity accounts; a fresh `pjx_identity` starts empty. The browser pass after
+> this step begins with **registration**, not sign-in.
+
+> 🛑 **`dotnet ef` cannot run against SSO from the devcontainer.** The tool is
+> pinned to 8.x, the project targets `netcoreapp3.1`, and the devcontainer only
+> carries the 8.0 runtime — so `dotnet ef` builds the project and then fails to
+> launch the design-time assembly:
+>
+> ```
+> You must install or update .NET to run this application.
+> Framework: 'Microsoft.AspNetCore.App', version '3.1.0' (x64)
+> The following frameworks were found:  8.0.31 at [/usr/share/dotnet/shared/...]
+> ```
+>
+> This is **not** the package-resolution blocker Step 2 worried about — Npgsql
+> 3.1 installs fine. It is a tooling gap, and it does not justify pulling
+> [Duende](phase-duende.md) forward.
+>
+> Run it in the SSO dev container instead, which has SDK 3.1.426 and runtime
+> 3.1.32, and whose `/app` is bind-mounted to the project directory so the
+> generated files land on the host:
+>
+> ```bash
+> docker exec pjx-sso-identityserver-dev dotnet tool install --global dotnet-ef --version 3.1.32
+> docker exec -w /app pjx-sso-identityserver-dev /root/.dotnet/tools/dotnet-ef migrations add InitialPostgres
+> docker exec -w /app pjx-sso-identityserver-dev /root/.dotnet/tools/dotnet-ef database update
+> ```
+>
+> Two consequences. The tool lives in the container's writable layer, so a
+> rebuild loses it — add it to `Dockerfile.dev` if this recurs. And that
+> container runs as **root**, so it writes root-owned files into the bind mount;
+> `sudo chown -R mike:mike projects/pjx-sso-identityserver` from the host
+> afterwards, the same recurring problem as `bin`/`obj`.
+>
+> If a run leaves `obj/*.EntityFrameworkCore.targets` behind, delete it. The 8.x
+> and 3.1 tools both write that file and a failed run can leave **two
+> concatenated copies**, which then fails as
+> `MSB4024 ... Unexpected end tag` — misleading, since nothing is wrong with the
+> project.
+
+> 🛑 **`appsettings.json:8` `"LocalDomain": "http://localhost:3000"` is stale.**
+> A pre-Phase-2 value that nothing updated when the app moved to
+> `https://pjx.test`. It is used only to build the **activation link in the
+> registration email**, which is why several browser passes never caught it —
+> and with SMTP disabled in dev the link only appears in
+> `docker logs pjx-sso-identityserver-dev`, pointing at a host that no longer
+> serves the app.
+>
+> Set it to `https://pjx.test` locally. Like `PJX_CORS_ORIGINS`, it is
+> environment-specific and must become the public hostname on AKS — add it to
+> the chart's config rather than leaving it baked into `appsettings.json`.
 
 ### Regenerate migrations
 
 Provider-specific SQL means the SQLite migrations cannot be reused:
 
+> 🛑 **Do these three in order, or the migration is silently wrong.** Confirmed
+> 2026-09-12:
+>
+> 1. **`UseSqlite` → `UseNpgsql` in `src/Pjx_Api/Startup.cs:65` first.** Swapping
+>    the package and the connection string is not enough — the registration picks
+>    the provider. Skipping it gives
+>    `System.ArgumentException: Connection string keyword 'host' is not supported`
+>    from `SqliteConnectionStringBuilder`, because EF is still SQLite and the
+>    string is now PostgreSQL.
+> 2. **Then delete `Migrations/`.** `migrations add` *succeeds* against the SQLite
+>    provider and writes a migration named `InitialPostgres` containing
+>    `type: "INTEGER"` and `type: "TEXT"` — SQLite types under a PostgreSQL name.
+>    Postgres emits `integer`, `text`, `timestamp with time zone`. Deleting the
+>    folder before fixing Startup.cs just regenerates the same wrong file.
+> 3. **Then start Postgres.** There is no `postgres` service in
+>    `docker-compose.devcontainer.yml` until you add the block at the end of this
+>    step, so `Host=localhost` has nothing to reach.
+
 ```bash
+# only after Startup.cs uses UseNpgsql and postgres is running
 rm -rf Migrations/
 dotnet ef migrations add InitialPostgres
-dotnet ef database update    # against Azure, using the allow-me firewall rule from Azure Foundation
+dotnet ef database update    # against the local postgres:16-alpine, NOT Azure
 ```
+
+Check the generated migration before applying it — `type: "INTEGER"` anywhere in
+`Migrations/*_InitialPostgres.cs` means the provider swap did not take.
 
 ### Expect these differences
 
@@ -351,6 +468,18 @@ Do not point local dev at Azure. Add a Postgres service to
     volumes:
       - pjx-pgdata:/var/lib/postgresql/data
     networks: [pjx-network]
+```
+
+A named volume must also be **declared** at the top level, or compose refuses to
+start with `service "postgres" refers to undefined volume pjx-pgdata`. Add it
+next to `pjx-claude-config`:
+
+```yaml
+volumes:
+  pjx-claude-config:
+    name: pjx-claude-config
+  pjx-pgdata:
+    name: pjx-pgdata
 ```
 
 This is the point where `clean.sh`'s confirmation prompt (Phase 1) starts
@@ -419,10 +548,16 @@ resolve from a user's browser pointed at your AKS demo.
 | 3 | `public/config.js` + `<script>` in `public/index.html` | ✅ verified in `build/` output |
 | 3 | The 24 `process.env.REACT_APP_*` references across 6 files | ✅ `tsc --noEmit` clean, `validate.sh build` passes |
 | 3 | Browser pass on Compose — sign in, country, city, calendar, Profile, sign out | ⬜ |
-| 3 | ConfigMap under `templates/` | ⬜ wrong directory, see 🛑 below |
-| **3b** | Mount it, and make the React port a value | ⬜ |
-| **3c** | Warn when `config.js` fails to load | ⬜ |
-| — | `nginx:1.19.0` → `nginx:1.27-alpine` | ⬜ see the end of this step |
+| 3 | ConfigMap under `templates/` | ✅ `helm-pjx/templates/pjx-web-config.yaml` |
+| 3 | ConfigMap URLs match the ingress | ✅ fixed 2026-09-12 — subdomains, verified against `public/config.js` |
+| **3b** | `volumes:` / `volumeMounts:` with `subPath` | ✅ `pjx-web-react.yaml:40-47` |
+| **3b** | Deployment port references → value | ✅ lines 26, 30, 36 |
+| **3b** | Service `port` / `targetPort` → value | ✅ lines 59-60 |
+| **3b** | `values.yaml` `web.service.port` | ✅ `port: 80`, parses as a map |
+| **3b** | Guard the mount for dev images | ✅ `web.useNginx`, both blocks guarded |
+| **3b** | `helm template -s templates/pjx-web-react.yaml` renders the mount | ✅ verified 2026-09-12 |
+| **3c** | Warn when `config.js` fails to load | ✅ `runtimeConfig.ts:2-4` |
+| — | `nginx:1.19.0` → `nginx:1.27-alpine` | ✅ `Dockerfile:19` |
 
 **The fix:** serve configuration as a separate file that nginx delivers and the
 bundle reads at startup.
@@ -554,24 +689,152 @@ data:
 > git mv helm-pjx/ConfigMap.yaml helm-pjx/templates/pjx-web-config.yaml
 > ```
 
-> **This changes the OIDC URLs again.** Phase 7 moved the ingress to path-based
-> routing on one host, so the issuer becomes `https://demo.pjx.example.com/auth`,
-> not a subdomain. `Config.cs`'s redirect URIs and CORS origins must match — the
+> 🛑 **RESOLVED 2026-09-12.** Fixed; the ConfigMap now derives the three
+> subdomains from `.Values.ingress.host`, and `helm template` output matches
+> `public/config.js` exactly. Kept below because the reasoning still applies to
+> any future URL change.
+>
+> **The ConfigMap's URLs did not match the ingress (found 2026-09-12).** This
+> paragraph used to claim Phase 7 moved the ingress to path-based routing on one
+> host. It did not — `helm-pjx/templates/pjx-ingress.yaml` routes by
+> **subdomain**: `api.`, `ql.`, `sso.` and `node.` prefixed onto
+> `.Values.ingress.host`, each with `path: "/"`. The host itself is React.
+>
+> `helm-pjx/templates/pjx-web-config.yaml` was written against the path-based
+> claim, so four of its five values point at routes that do not exist. Compare
+> with `projects/pjx-web-react/public/config.js`, which is the working dev copy:
+>
+> | Key | ConfigMap renders | Should be (per the ingress and `public/config.js`) |
+> |---|---|---|
+> | `GRAPHQL_ENDPOINT` | `https://pjx.test/graphql` | `https://ql.pjx.test` |
+> | `SSO_ISSUER_URL` | `https://pjx.test/auth` | `https://sso.pjx.test` |
+> | `API_DOTNET_URL` | `https://pjx.test/api` | `https://api.pjx.test` |
+> | `PUBLIC_URL` | `https://pjx.test` | ✅ correct |
+>
+> The failure mode is quiet: every wrong URL still matches the ingress's `/`
+> rule for the bare host, so it routes to **React** and returns `index.html` with
+> a 200. The app receives HTML where it expected JSON or OIDC metadata. Nothing
+> 404s, nothing logs an error server-side.
+>
+> Note also that `GRAPHQL_ENDPOINT` carries **no path** in the working dev copy —
+> `https://ql.pjx.test`, not `.../graphql`. Fix the template to derive the three
+> subdomains from `.Values.ingress.host` the way the ingress does. `Config.cs`'s redirect URIs and CORS origins must match — the
 > same exact-match discipline as Phase 2 step 5, with the same failure mode if
 > they drift.
 
+### The whole path, and every port on it
+
+Reference for the port work in Step 3b. Two different routes exist — Docker
+Compose today, Kubernetes for k3d and AKS — and they carry the *same* hostnames
+to the *same* container ports, by completely different machinery.
+
+#### Route 1 — Docker Compose (today's `make up`)
+
+```mermaid
+flowchart TB
+    B["<b>Browser</b><br/>https://api.pjx.test<br/>implicit port 443"]
+    H["<b>/etc/hosts</b><br/>127.0.0.1 api.pjx.test<br/><i>host + devcontainer, Phase 2</i>"]
+    P["<b>Host port 443</b><br/><i>local/docker-compose.yml</i><br/>ports: 443:443"]
+    T["<b>pjx-traefik</b> (traefik:v3.6)<br/>entrypoint https = :443<br/>entrypoint http = :80 → redirect<br/>dashboard :8080 → host 9091"]
+    R["<b>Router rule</b> — a Docker label<br/>Host(api.pjx.test)"]
+    S["<b>loadbalancer.server.port=80</b><br/><i>label on the service</i>"]
+    C["<b>pjx-api-dotnet</b><br/>Kestrel on :80<br/><i>container port, never published</i>"]
+
+    B --> H --> P --> T --> R --> S --> C
+```
+
+Traefik discovers everything by reading the Docker socket and filtering on
+`traefik.constraint-label=pjx-public`. **No container publishes a host port** —
+only Traefik does. That is why `docker ps` shows empty `PORTS` on the app
+containers and why a stale `simpleproxy` holding host 80 breaks all routing at
+once.
+
+#### Route 2 — Kubernetes (k3d locally, AKS later)
+
+```mermaid
+flowchart TB
+    B["<b>Browser</b><br/>https://api.pjx.test<br/>implicit port 443"]
+    D["<b>Name resolution</b><br/>k3d: /etc/hosts → 127.0.0.1<br/>AKS: real DNS → LB public IP"]
+    L["<b>Cluster entry on :443</b><br/>k3d: --port 443:443@loadbalancer<br/>AKS: Azure Load Balancer"]
+    T["<b>Traefik ingress controller</b><br/><i>in-cluster pod</i>"]
+    I["<b>Ingress rule</b><br/><i>pjx-ingress.yaml</i><br/>host: api.&lt;ingress.host&gt;<br/>path: / → pjx-dotnet-service, port name: http"]
+    SV["<b>Service</b> pjx-dotnet-service<br/>port: 80 → targetPort: 80<br/>name: http"]
+    PO["<b>Pod</b> pjx-dotnet-deployment<br/>containerPort: 80"]
+
+    B --> D --> L --> T --> I --> SV --> PO
+```
+
+The ingress references the Service by **port name** (`http`), not number. That is
+load-bearing: it means changing `web.service.port` from 3000 to 80 needs no
+ingress edit. Renaming the port would break every rule at once.
+
+#### Every number, in one table
+
+| Service | Hostname | Compose label port | containerPort | Service `port`→`targetPort` |
+|---|---|---|---|---|
+| React | `pjx.test` | `3000` | `{{ .Values.web.service.port }}` | same value both sides |
+| .NET API | `api.pjx.test` | `80` | `80` | `80` → `80` |
+| Apollo | `ql.pjx.test` | `4000` | `4000` | `4000` → `4000` |
+| Node API | `node.pjx.test` | `8081` | `8081` | `8081` → `8081` |
+| SSO | `sso.pjx.test` | `80` | `5002` ⚠️ | `80` → `80` |
+
+React is the only service whose port differs between environments, because it is
+the only one whose dev and production images are different programs:
+`react-scripts start` on 3000 versus nginx on 80. Hence the value:
+
+```
+values.yaml            web.service.port: 80     ← production nginx
+environments/local.yaml  web.service.port: 3000 ← CRA dev server
+```
+
+> ⚠️ **`pjx-sso-identityserver.yaml:22` declares `containerPort: 5002`, and the
+> process does not listen there.** `ASPNETCORE_URLS` is
+> `https://+:443;http://+:80`, and both probes and the Service correctly use
+> `80`. Kubernetes treats `containerPort` as documentation — it neither opens nor
+> restricts anything — so this is inert today, but it is wrong, and it is exactly
+> the kind of stale number someone later "fixes" the Service to match. Not part
+> of Step 3b; noted here so the table is honest.
+
+#### Where each hop is configured
+
+| Hop | File |
+|---|---|
+| Hostname → 127.0.0.1 | `/etc/hosts`, host **and** devcontainer (Phase 2) |
+| Host :80/:443 → Traefik | `local/docker-compose.yml` `ports:` |
+| Traefik entrypoints | `local/docker-compose.yml` `command:` |
+| Host → container (Compose) | `traefik.*` labels in `docker-compose.devcontainer.yml` |
+| Host :443 → cluster (k3d) | `k3d cluster create --port "443:443@loadbalancer"` |
+| Hostname → Service (k8s) | `helm-pjx/templates/pjx-ingress.yaml` |
+| Service → pod | each `helm-pjx/templates/pjx-*.yaml` Service block |
+| Port the app listens on | the app itself — `ASPNETCORE_URLS`, nginx config, `PORT` |
+| URLs the browser calls | `pjx-web-config.yaml` (deployed) / `public/config.js` (dev) |
+
+The last row is the one Step 3 exists for. Every other hop is server-side and
+provable with `curl`; that one lives in the **browser**, which is why a wrong
+value there returns a cheerful `200` with `index.html` instead of an error.
+
 ### Step 3b — Mount it, and make the port a value
 
-**Still outstanding as of 2026-09-07.** The ConfigMap existing is not enough:
-`helm-pjx/templates/pjx-web-react.yaml` has **no `volumes:` or `volumeMounts:` at
-all**, so nothing reaches the pod. And its port is wrong for the production image:
+> **Read first:** [ConfigMaps, volumes and volumeMounts](../reference/kubernetes-config-and-volumes.md)
+> — what the two blocks do, why a missing mount fails silently, and why
+> `subPath` is load-bearing.
 
-| Line | Currently | Should be |
+**Partly done as of 2026-09-12.** The Deployment's three port references are
+already values; the Service's two are not. The ConfigMap existing is still not
+enough: `helm-pjx/templates/pjx-web-react.yaml` has **no `volumes:` or
+`volumeMounts:` at all**, so nothing reaches the pod.
+
+| Line | What | Status |
 |---|---|---|
-| 25 | `containerPort` block | a value |
-| 30 | `port: 3000` — readiness probe | a value |
-| 36 | `port: 3000` — liveness probe | a value |
-| 51 | `port: 3000` — Service | a value |
+| 26 | `containerPort` | ✅ `{{ .Values.web.service.port }}` |
+| 30 | readiness probe port | ✅ `{{ .Values.web.service.port }}` |
+| 36 | liveness probe port | ✅ `{{ .Values.web.service.port }}` |
+| 51 | Service `port: 3000` | ⬜ still hardcoded |
+| 52 | Service `targetPort: 3000` | ⬜ still hardcoded |
+
+Note there are **five** references, not four — the Service carries both `port`
+and `targetPort`. Leaving `targetPort` at `3000` while the container listens on
+`80` is a 502 that the Deployment alone will not reveal.
 
 `3000` is the CRA dev server. The production image serves from **nginx on 80**.
 Deploy a CI-built image against today's chart and React returns **502** — the same
@@ -597,8 +860,22 @@ web:
     port: 3000        # CRA dev server
 ```
 
-Then replace all four hardcoded `3000`s with `{{ .Values.web.service.port }}`, and
-add the mount to the pod spec:
+> 🛑 **`values.yaml` currently breaks the chart.** The block above was added as
+> `port:80`, with no space after the colon. YAML then reads the whole line as the
+> *string* `"port:80"`, so `web.service` is a string rather than a map and
+> `{{ .Values.web.service.port }}` fails to render. `local.yaml` sets
+> `service: { port: 3000 }` correctly, so **local rendering still works and hides
+> this** — it only surfaces with production values. Fix it to `port: 80`.
+
+Then replace the two remaining hardcoded `3000`s (Service `port` and
+`targetPort`, lines 51–52) with `{{ .Values.web.service.port }}`.
+
+**The pod spec is in the same file** — `helm-pjx/templates/pjx-web-react.yaml`,
+the Deployment above the `---`, not the Service below it and not a separate file.
+`volumeMounts:` belongs to the *container* (8 spaces, alongside `livenessProbe:`
+at line 33, so after line 39); `volumes:` belongs to the *pod* (6 spaces, a
+sibling of `containers:` at line 17). Both go at the end of the Deployment, just
+before the `---`:
 
 ```yaml
         volumeMounts:
@@ -615,11 +892,67 @@ add the mount to the pod spec:
 directory — without it the mount hides every other file in nginx's webroot,
 including `index.html`, and the app serves nothing.
 
-> **Guard the mount for dev images.** The dev image is `react-scripts start`, which
-> has no `/usr/share/nginx/html`. Either gate the volume on a value
-> (`{{- if .Values.web.service.useNginx }}`) or accept that `local.yaml` and the
-> deployed values diverge here. This is the same
-> [dev-images-in-the-cluster](README.md#deferred-work) problem, surfacing again.
+> **Guarding the mount for dev images is optional.** The dev image is
+> `react-scripts start`, which has no `/usr/share/nginx/html` — but the mount is
+> **inert, not broken**: `subPath` makes the kubelet create the path, and the CRA
+> dev server reads `public/config.js` from its own app directory, never nginx's
+> webroot. Skipping the guard leaves a stray file in a container that ignores it.
+>
+> If you want it, add a **new** value — `useNginx` does not exist in
+> `values.yaml` today. It belongs under `web:`, not under `web.service:`, because
+> it describes the image rather than the port:
+>
+> ```yaml
+> # values.yaml
+> web:
+>   useNginx: true       # production image is nginx
+> ```
+>
+> ```yaml
+> # environments/local.yaml
+> web:       { replicas: 1, useNginx: false, image: { ... }, service: { port: 3000 } }
+> ```
+>
+> Then guard **both** blocks — `volumeMounts:` and `volumes:` are separate keys at
+> different indent levels, so one `{{- if }}` cannot cover them:
+>
+> ```yaml
+>         {{- if .Values.web.useNginx }}
+>         volumeMounts:
+>         - name: config
+>           mountPath: /usr/share/nginx/html/config.js
+>           subPath: config.js
+>         {{- end }}
+>       {{- if .Values.web.useNginx }}
+>       volumes:
+>       - name: config
+>         configMap:
+>           name: pjx-web-config
+>       {{- end }}
+> ```
+>
+> This is the same [dev-images-in-the-cluster](README.md#deferred-work) problem
+> surfacing again, and it disappears once the cluster runs production images.
+>
+> **What went wrong doing this, 2026-09-12.** The guard went into the template and
+> `useNginx: false` into `local.yaml`, but `values.yaml` was given `useIngress:
+> true` — a different name. The template reads `useNginx`, which production
+> therefore left undefined; **an undefined value is falsy in Helm**, so both
+> blocks vanished from the production render with no error. `useIngress` was read
+> by nothing at all.
+>
+> Neither `helm lint` nor `helm template` can catch this: a value nothing reads
+> and a template key nothing defines are both perfectly legal. The only proof is
+> rendering the template and reading it for the block you expected —
+>
+> ```bash
+> helm template pjx-test helm-pjx -s templates/pjx-web-react.yaml
+> ```
+>
+> Note the direction of the trade: the guard exists to avoid a *harmless* stray
+> file on the dev image, and its failure mode is losing the mount entirely in
+> production. When a guard's downside is worse than what it guards against, both
+> branches need to be explicit from the start.
 
 `stdin: true` / `tty: true` can also come off the React pod once it is nginx — they
 exist only because `react-scripts start` exits when stdin closes.
@@ -652,9 +985,16 @@ The builder stage is on `node:18-slim` as of Phase 7c. **`nginx:1.19.0` (2020) i
 not** — and that is the layer actually shipped to AKS. Bump it while you are
 editing the file:
 
+The only `FROM nginx` in the repo is **`projects/pjx-web-react/Dockerfile`,
+line 19** — one line, one file:
+
 ```dockerfile
 FROM nginx:1.27-alpine
 ```
+
+Lines 20–23 stay as they are: alpine keeps the same `/usr/share/nginx/html`
+webroot and the same default entrypoint, so the `WORKDIR`, the `rm -rf ./*`, the
+`COPY --from=builder` and the `ENTRYPOINT` are all unaffected.
 
 Then `docker build -t pjx-prod-pjx-web-react:test projects/pjx-web-react` to
 confirm the static output still serves. This is a serve-stage-only change, so it
@@ -662,12 +1002,11 @@ cannot affect the `react-scripts` build — but re-run
 `CI=true ./local/scripts/validate.sh build pjx-web-react` anyway, since that is
 what CI gates on.
 
-Note this is also where the **React Service port** must become a chart value:
-`helm-pjx/templates/pjx-web-react.yaml` hardcodes `3000` (the CRA dev server) at
-lines 30, 36, 51 and 52, while this production image serves on **80**. Deploy a
-CI-built image against today's chart and React returns 502. Both belong in the
-same change — see the callout at the end of
-[Phase 7c Step 0](phase-7c-cicd.md#step-0--fix-the-production-dockerfiles-first).
+Land this together with [Step 3b](#step-3b--mount-it-and-make-the-port-a-value):
+the `subPath` mount over `/usr/share/nginx/html/config.js` and the Service port
+of **80** both describe this nginx image and nothing else. As of 2026-09-12 the
+Deployment's three port references are already values; what remains there is the
+Service's `port` and `targetPort` (lines 51–52) plus the mount itself.
 
 ---
 

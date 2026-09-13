@@ -5,9 +5,9 @@ metadata:
 data:
   config.js: |
     window.__PJX_CONFIG__ = {
-      GRAPHQL_ENDPOINT: "https://{{ .Values.ingress.host }}/graphql",
-      SSO_ISSUER_URL:   "https://{{ .Values.ingress.host }}/auth",
+      GRAPHQL_ENDPOINT: "https://ql.{{ .Values.ingress.host }}",
+      SSO_ISSUER_URL:   "https://sso.{{ .Values.ingress.host }}",
       SSO_CLIENT_ID:    "pjx-web-react",
-      API_DOTNET_URL:   "https://{{ .Values.ingress.host }}/api",
+      API_DOTNET_URL:   "https://api.{{ .Values.ingress.host }}",
       PUBLIC_URL:       "https://{{ .Values.ingress.host }}"
     };

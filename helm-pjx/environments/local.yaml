@@ -15,7 +15,7 @@ global:
 # daemon are pjx-root-pjx-web-react, not pjx-web-react. Override the
 # repository here rather than in values.yaml — the prefix is an artifact of local
 # Compose builds and is wrong for GHCR and ACR.
-web:       { replicas: 1, image: { repository: pjx-root-pjx-web-react } }
+web:       { replicas: 1, useNginx: false, image: { repository: pjx-root-pjx-web-react }, service: { port: 3000 } }
 apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
 nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
 dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }
