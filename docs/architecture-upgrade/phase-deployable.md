@@ -780,6 +780,14 @@ and the same in `pjx-sso-identityserver.yaml` with `key: sso-connection`.
 > silently falls back to `appsettings.json`'s `Host=postgres`, which happens to
 > be *right locally and wrong everywhere else*. That is the worst possible
 > failure: it works on k3d and breaks on AKS.
+>
+> **Since 2026-09-26 there is no fallback.** Copilot's review of PR #30 flagged
+> the committed password in both `appsettings.json` files; the
+> `ConnectionStrings` block is gone from each. Compose sets
+> `ConnectionStrings__DefaultConnection` on both .NET services, the chart sets
+> it from the `pjx-db` Secret, and a missing or misspelled variable now fails
+> at startup inside `Migrate()` instead of connecting to the wrong place.
+> `dotnet ef database update` from the devcontainer needs `--connection`.
 
 ### Verify 5b
 
