@@ -46,7 +46,7 @@ Phase 4 .NET 8 migration, and two of them cannot build at all.
 | `pjx-api-dotnet` | `dotnet/core/aspnet:8.0`, `dotnet/core/sdk:8.0` | 🔴 **do not exist** |
 | `pjx-graphql-apollo` | `node:10-slim` | 🔴 EOL April 2021 |
 | `pjx-web-react` | `node:14.5.0-slim` → `nginx:1.19.0` | 🔴 **build fails** — npm 6 cannot read the v3 lock file |
-| `pjx-sso-identityserver` | `dotnet/core/aspnet:3.1-buster-slim` | 🟠 EOL runtime, valid path — the documented [Phase 8](phase-8-duende.md) deferral |
+| `pjx-sso-identityserver` | `dotnet/core/aspnet:3.1-buster-slim` | 🟠 EOL runtime, valid path — the documented [Duende](phase-duende.md) deferral |
 | `pjx-api-node` | `node:18-slim` | ✅ |
 
 **`mcr.microsoft.com/dotnet/core/*` stopped at 3.1.** .NET 5 renamed the
@@ -101,9 +101,9 @@ Full walkthrough with diagrams:
 This gets the image building; it does **not** retire the deferral.
 `react-scripts` 3.4.3 and `typescript` 3.7.5 stay pinned and now compile on
 Node 18 via a compatibility flag — still owed to
-[Phase 10 Step 3](phase-10-deployable.md#step-3--react-runtime-configuration).
+[Deployable Step 3](phase-deployable.md#step-3--react-runtime-configuration).
 
-Leave `pjx-sso-identityserver` alone. Its 3.1 base belongs to Phase 8 and is the
+Leave `pjx-sso-identityserver` alone. Its 3.1 base belongs to Duende and is the
 reason for the Dependabot suppression below.
 
 ### Build all five locally before writing any YAML
@@ -161,7 +161,7 @@ builder stage would drop that toolchain from the shipped image, the way
 > `stdin`/`tty` can go too once React is nginx — those exist only because
 > `react-scripts start` exits when stdin closes.
 >
-> This is **not** a reason to do Phase 10 first. Phase 10's React step is about
+> This is **not** a reason to do Deployable first. Deployable's React step is about
 > `REACT_APP_*` runtime configuration, a different problem in the same service.
 > Nothing here needs PostgreSQL, Key Vault, or the EF Core upgrade.
 
@@ -295,7 +295,7 @@ and the container build already covers it.
 GHCR's own scanner will flag `pjx-sso-identityserver` for its
 `mcr.microsoft.com/dotnet/aspnet:3.1` base — unpatched runtime on Debian 10. That
 is the known, accepted cost of the deferral, and it is
-[Phase 8](phase-8-duende.md)'s trigger. Suppress the alert deliberately with a
+[Duende](phase-duende.md)'s trigger. Suppress the alert deliberately with a
 dated note rather than leaving it to look unnoticed:
 
 ```yaml
@@ -306,7 +306,7 @@ updates:
     directory: /projects/pjx-sso-identityserver
     schedule: { interval: monthly }
     # netcoreapp3.1 base is a known deferral tracked in
-    # docs/architecture-upgrade/phase-8-duende.md. Revisit before any
+    # docs/architecture-upgrade/phase-duende.md. Revisit before any
     # public deployment.
     open-pull-requests-limit: 0
 ```
@@ -381,7 +381,7 @@ jobs:
 
 Recorded here so it is not lost:
 
-- **[Phase 8](phase-8-duende.md) — SSO to Duende IdentityServer.** Not "not in
+- **[Duende](phase-duende.md) — SSO to Duende IdentityServer.** Not "not in
   this plan", but explicitly outside the mandatory path. Gate: before any
   production deployment
 - **`Pjx.Calendar_Test` mocks a method the code no longer calls.** All 12 tests in

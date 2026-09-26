@@ -18,6 +18,8 @@ spec:
       - name: pjx-apollo
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.apollo) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.apollo.resources | nindent 10 }}
         env:
           # The image carries NODE_API_ENDPOINT=http://pjx-api-node:8081 from its
           # gitignored .env — a Compose service name that does not exist in k8s,

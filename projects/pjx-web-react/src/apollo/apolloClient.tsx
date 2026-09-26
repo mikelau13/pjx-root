@@ -2,6 +2,7 @@ import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { HttpLink } from 'apollo-link-http';
 import fetch from 'isomorphic-unfetch';
+import { config } from '../utils/runtimeConfig';
 
 export default function createApolloClient(initialState: any, ctx: any) {
     // The `ctx` (NextPageContext) will only be present on the server.
@@ -9,7 +10,7 @@ export default function createApolloClient(initialState: any, ctx: any) {
     return new ApolloClient({
         ssrMode: Boolean(ctx),
         link: new HttpLink({
-            uri: process.env.REACT_APP_GRAPHQL_ENDPOINT, // Server URL (must be absolute)
+            uri: config.graphqlEndpoint, // Server URL (must be absolute)
             credentials: 'same-origin', // Additional fetch() options like `credentials` or `headers`
             fetch,
         }),

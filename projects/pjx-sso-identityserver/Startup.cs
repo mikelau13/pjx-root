@@ -52,7 +52,7 @@ namespace IdentityServerAspNetIdentity
             });
 
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlite(Configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection")));
 
             services.AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -88,7 +88,11 @@ namespace IdentityServerAspNetIdentity
             IConfigurationSection section = configurationRoot.GetSection("SSO"); 
             string certFile = section["CERTIFICATE"] ?? "pjx-sso-identityserver.rsa_2048.cert.pfx";
             string certPassword = section["PASSWORD"] ?? "password";
-            var rsaCertificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(System.IO.Path.Combine(Environment.ContentRootPath, certFile), certPassword);
+            string certPath = System.IO.Path.IsPathRooted(certFile)
+                ? certFile
+                : System.IO.Path.Combine(Environment.ContentRootPath, certFile);
+            var rsaCertificate = new System.Security.Cryptography.X509Certificates.X509Certificate2(certPath, certPassword);
+
             builder.AddSigningCredential(rsaCertificate);
 
             services.AddCors(options =>

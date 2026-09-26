@@ -215,7 +215,7 @@ Three templates were deleted outright:
 - **`pjx-secret.yaml`** — shipped `sso-password` and `certificate-password` as
   base64 `password` in a public repository. Base64 is encoding, not encryption.
   Deleting does not remove it from git history, so treat both as compromised;
-  [Phase 10](../architecture-upgrade/phase-10-deployable.md) sources these from
+  [Deployable](../architecture-upgrade/phase-deployable.md) sources these from
   Key Vault.
 - **`pjx-namespace.yaml`** — the chart created namespace `pjx` while Phase 7b
   installs with `--create-namespace`. Helm rejects a release containing a

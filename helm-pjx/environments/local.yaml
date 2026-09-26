@@ -15,11 +15,23 @@ global:
 # daemon are pjx-root-pjx-web-react, not pjx-web-react. Override the
 # repository here rather than in values.yaml — the prefix is an artifact of local
 # Compose builds and is wrong for GHCR and ACR.
-web:       { replicas: 1, image: { repository: pjx-root-pjx-web-react } }
+web:
+  replicas: 1
+  useNginx: false
+  image: { repository: pjx-root-pjx-web-react }
+  service: { port: 3000 }
+  # values.yaml's 512Mi/500m fit the nginx image serving static files. The dev
+  # image webpack-compiles at pod start and was OOMKilled at 510Mi with the CPU
+  # pinned at the limit. Local only — the production image keeps the small numbers.
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: 2,    memory: 2Gi }
 apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
 nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
 dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }
 sso:       { replicas: 1, image: { repository: pjx-root-pjx-sso-identityserver } }
+postgres:  { enabled: true, password: password }
+
 
 ingress:
   enabled: true
@@ -31,6 +43,8 @@ ingress:
     # not cert-manager. Covers *.pjx.test and pjx.test, so every hostname works
     # and the host browser already trusts the CA.
     secretName: pjx-tls
-
+connectionStrings:
+  dotnetApi: "Host=postgres;Database=pjx_calendar;Username=pjx;Password=password"
+  sso:       "Host=postgres;Database=pjx_identity;Username=pjx;Password=password"
 # The .NET API reaches SSO over in-cluster Service DNS.
 ssoUrl: http://pjx-sso-service:80

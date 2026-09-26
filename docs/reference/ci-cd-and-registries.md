@@ -235,14 +235,14 @@ Not to enable it — to **suppress it, visibly**, for one service:
 ```yaml
 - package-ecosystem: docker
   directory: /projects/pjx-sso-identityserver
-  # netcoreapp3.1 base is a known deferral tracked in phase-8-duende.md.
+  # netcoreapp3.1 base is a known deferral tracked in phase-duende.md.
   open-pull-requests-limit: 0
 ```
 
 `pjx-sso-identityserver` builds on `dotnet/core/aspnet:3.1-buster-slim` — an
 unpatched runtime on Debian 10. The moment that image is in GHCR, GitHub's
 scanner flags it, and it will keep flagging it until
-[Phase 8](../architecture-upgrade/phase-8-duende.md) replaces IdentityServer4.
+[Duende](../architecture-upgrade/phase-duende.md) replaces IdentityServer4.
 
 Two ways to live with that:
 
@@ -311,7 +311,7 @@ pipeline over a shell script — a failure stops the line rather than shipping.
 
 ### Where this goes next
 
-[Phase 11](../architecture-upgrade/phase-11-deploy.md) adds one hop. AKS pulls
+[AKS Deploy](../architecture-upgrade/phase-aks-deploy.md) adds one hop. AKS pulls
 from **ACR**, not GHCR, so images are copied registry-to-registry:
 
 ```bash
@@ -336,7 +336,7 @@ and CloudDevEnvironment sit on opposite sides.
 
 ```mermaid
 flowchart TD
-    subgraph push["PUSH — pjx, Phase 11"]
+    subgraph push["PUSH — pjx, AKS Deploy"]
         p1["git push tag"] --> p2["GitHub Actions"]
         p2 --> p3["az acr import"]
         p2 --> p4["helm upgrade --install<br/>runs FROM the runner"]
@@ -438,7 +438,7 @@ config repo and the controllers — not a change to how anything is built.
 | **Matrix** | one job definition expanded per value, so five images build concurrently |
 | **`GITHUB_TOKEN`** | per-run credential injected by Actions; needs `packages: write` to push |
 | **Dependabot** | a separate service that opens dependency-bump PRs on a schedule |
-| **Push-based CD** | a pipeline outside the cluster runs `helm upgrade` against it — pjx, Phase 11 |
+| **Push-based CD** | a pipeline outside the cluster runs `helm upgrade` against it — pjx, AKS Deploy |
 | **Pull-based CD / GitOps** | controllers inside the cluster reconcile it against a declared state — Flux, as CloudDevEnvironment uses |
 | **Reconciliation** | the loop that compares actual cluster state to desired and corrects drift |
 | **HelmRelease** | a Flux resource naming a chart, a version, and values — the pinned coordinate |

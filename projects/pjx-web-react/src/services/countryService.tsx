@@ -1,5 +1,6 @@
 import axios from 'axios';
 import AuthService from './authService';
+import { config } from '../utils/runtimeConfig';
 
 export default class CountryService {
     authService: AuthService;
@@ -14,7 +15,7 @@ export default class CountryService {
           Authorization: 'Bearer ' + token
         };
     
-        return axios.get(`${process.env.REACT_APP_API_DOTNET_URL}/api/country/getall`, { headers });
+        return axios.get(`${config.apiDotnetUrl}/api/country/getall`, { headers });
     }
 
     getCountryAll(): Promise<any> {

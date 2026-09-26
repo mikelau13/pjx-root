@@ -5,30 +5,48 @@ global:
 dotnetApi:
   appName: pjx-dotnet
   replicas: 1
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   image:
     repository: pjx-api-dotnet
     tag: ""
 nodeApi:
   appName: pjx-node
   replicas: 1
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   image:
     repository: pjx-api-node
     tag: ""
 web:
   appName: pjx-react
   replicas: 2
+  useNginx: true  #production use nginx
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   image:
     repository: pjx-web-react
     tag: ""   #defaults to .Chart.AppVersion if not set
+  service:
+    port: 80   # production nginx
 apollo:
   appName: pjx-apollo
   replicas: 1
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   image:
     repository: pjx-graphql-apollo
     tag: ""
 sso:
   appName: pjx-sso
   replicas: 1
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
   image:
     repository: pjx-sso-identityserver
     tag: ""
@@ -39,5 +57,21 @@ ingress:
   tls:
     enabled: false
     secretName: ""
-
+postgres:
+  enabled: false          # Azure uses a managed server; see Azure Foundation
+  imagePullPolicy: IfNotPresent   # upstream image, not built by this repo —
+                                    # must not inherit global's Never on k3d
+  appName: pjx-postgres
+  image: postgres:16-alpine
+  username: pjx
+  database: pjx_calendar
+  storage: 2Gi
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+connectionStrings:
+  # Overridden per environment. In Azure these name the managed server and the
+  # password comes from Key Vault, not from here.
+  dotnetApi: ""
+  sso: ""
 ssoUrl: http://pjx-sso-service:80

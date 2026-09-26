@@ -1,14 +1,19 @@
-# Phase 11 — Deploy to AKS with continuous delivery
+# AKS Deploy phase — Deploy to AKS with continuous delivery
+
+> **Executes 13th of 14** — after [Azure Foundation](phase-azure-foundation.md),
+> before [Duende](phase-duende.md). This phase is named rather than numbered;
+> see the [README](README.md#progress).
 
 **Goal:** the demo running on AKS, deployed by GitHub Actions using federated
 credentials — no Azure secrets stored in GitHub.
 
 **Risk:** Medium. **Reversible:** yes — `helm rollback` or `helm uninstall`.
 
-**Depends on:** Phase 9 (infrastructure) and Phase 10 (deployable application).
+**Depends on:** [Azure Foundation](phase-azure-foundation.md) (infrastructure)
+and [Deployable](phase-deployable.md) (a deployable application).
 
 ```bash
-git checkout -b feature/arch-phase-11-deploy
+git checkout -b feature/arch-aks-deploy
 ```
 
 ---
@@ -175,7 +180,7 @@ rather than leaving the cluster half-updated. `--timeout 10m` is generous becaus
 .NET cold start on a single `B2ms` is slow.
 
 > **The smoke test will fail from GitHub's runners.** The ingress is
-> IP-restricted to your address (Phase 9 step 6), and Actions runners have
+> IP-restricted to your address (Azure Foundation step 6), and Actions runners have
 > unpredictable egress IPs. Options, in order of preference:
 >
 > 1. Replace the external smoke test with an in-cluster one:
@@ -187,7 +192,7 @@ rather than leaving the cluster half-updated. `--timeout 10m` is generous becaus
 > 3. Drop the external check and verify manually after deploy.
 >
 > Option 1 is what I would build. Do not solve this by widening the allowlist —
-> that quietly removes the reasoning that keeps [Phase 8](phase-8-duende.md)
+> that quietly removes the reasoning that keeps [Duende](phase-duende.md)
 > optional.
 
 ---
@@ -203,15 +208,15 @@ global:
 ingress:
   enabled: true
   className: traefik
-  host: demo.pjx.example.com      # your DEMO_HOST from Phase 9
+  host: demo.pjx.example.com      # your DEMO_HOST from Azure Foundation
   tls:
     enabled: true
     issuer: letsencrypt
 
 keyVault:
   enabled: true
-  name: kv-pjx-xxxxxx             # from Phase 9
-  clientId: "<CSI driver client id from Phase 9 step 5>"
+  name: kv-pjx-xxxxxx             # from Azure Foundation
+  clientId: "<CSI driver client id from Azure Foundation step 5>"
   tenantId: "<your tenant id>"
 
 # One replica each. SQLite is gone, but a single B2ms node has no room
@@ -225,7 +230,7 @@ sso:       { replicas: 1 }
 
 No secrets appear here — connection strings, the signing certificate password,
 and the OTLP headers all arrive from Key Vault via the `SecretProviderClass`
-from Phase 10. This is the specific place where the plan diverges from
+from Deployable. This is the specific place where the plan diverges from
 `AwareServices/helm/values.aks-deploy.yaml`, which carries a live connection
 string in plaintext.
 
@@ -330,7 +335,7 @@ Two differences from every prior phase:
 - **Activation codes are in pod logs now**, not `docker logs`:
   `kubectl -n pjx logs -l app=pjx-sso --tail=50`
 - **Calendar CRUD is the critical test.** It exercises PostgreSQL through EF Core
-  with real `DateTime` values — the thing Phase 10 was most likely to break.
+  with real `DateTime` values — the thing Deployable was most likely to break.
 
 Check 5 is non-negotiable. Verify the restriction from a genuinely different
 network before showing anyone the URL.
@@ -352,10 +357,10 @@ az group delete -n rg-pjx --yes         # remove everything
 
 The demo is live and IP-restricted. To make it public:
 
-1. Do [Phase 8](phase-8-duende.md) — Duende + `net8.0`, which removes the
+1. Do [Duende](phase-duende.md) — Duende + `net8.0`, which removes the
    unpatched `aspnet:3.1` base image.
 2. Then, and only then, widen `service.spec.loadBalancerSourceRanges` to
-   `0.0.0.0/0` and re-run the Phase 9 ingress step.
+   `0.0.0.0/0` and re-run Azure Foundation ingress step.
 
 That ordering is the whole reason the IP restriction was chosen: it lets the
 deployment pipeline be proven before the auth migration, rather than making the

@@ -208,7 +208,7 @@ Three deliberate departures from `CDE:.devcontainer/Dockerfile:30-35`:
   phase specifies.
 
 Left out on purpose: `kubectx`/`kubens` (one cluster, little to switch between),
-`azure-cli` (large, and not needed until [Phase 9](phase-9-azure-foundation.md)),
+`azure-cli` (large, and not needed until [Azure Foundation](phase-azure-foundation.md)),
 and CDE's Chrome/ChromeDriver block (test automation, not this phase).
 
 ### Verify
@@ -273,7 +273,7 @@ dev-up.sh -d && sleep 60 && status.sh
 > Nothing in Phases 6, 7, or 7b needs migrations, so this is not urgent — but do
 > not spend time debugging the tool. Either pin `dotnet-ef` to `3.1.*` to match
 > what the projects actually use, or leave it at 8.x and accept that migrations
-> wait for [Phase 10 Step 0](phase-10-deployable.md#step-2--sqlite--postgresql),
+> wait for [Deployable Step 0](phase-deployable.md#step-2--sqlite--postgresql),
 > which is where the EF Core upgrade belongs.
 
 ### One SDK, deliberately
@@ -290,7 +290,7 @@ there, SSO is already excluded from `validate.sh` and built via Docker, and this
 image still needs no second SDK.
 
 Resist adding the 3.1 SDK here. It would be the only reason this image carries
-two runtimes, and it disappears entirely at Phase 8.
+two runtimes, and it disappears entirely at Duende.
 
 ### Azure CLI is required — not optional
 
@@ -299,7 +299,7 @@ Earlier drafts of this phase dropped them as "AwareMD-specific", which was wrong
 Add:
 
 ```dockerfile
-# Azure CLI + kubelogin. Required from Phase 9 onward.
+# Azure CLI + kubelogin. Required from Azure Foundation onward.
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash && \
     az aks install-cli
 ```
@@ -482,7 +482,7 @@ Harmless for the other two Node projects — neither uses webpack.
 > **`node:14.5.0-slim`, EOL since April 2023** — and it cannot move to Node 18
 > while `react-scripts` is on 3.4.3. See the
 > [deferred-work table](README.md#deferred-work); it pairs with
-> [Phase 10's React runtime configuration](phase-10-deployable.md#step-3--react-runtime-configuration),
+> [Deployable's React runtime configuration](phase-deployable.md#step-3--react-runtime-configuration),
 > which is blocked by the same dependency.
 
 The other two Node services (`restify`, Apollo Server) have no such constraint.
@@ -583,7 +583,7 @@ introduce.
 
 > ### ⚠️ `az aks install-cli` silently un-pins kubectl
 >
-> If you add `azure-cli` — needed from [Phase 9](phase-9-azure-foundation.md), and
+> If you add `azure-cli` — needed from [Azure Foundation](phase-azure-foundation.md), and
 > reasonable to add early — note that `az aks install-cli` writes
 > `/usr/local/bin/kubectl` at **latest** by default, overwriting
 > `KUBECTL_VERSION`:

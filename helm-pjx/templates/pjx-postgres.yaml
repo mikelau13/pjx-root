@@ -1,0 +1,114 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pjx-postgres
+type: Opaque
+stringData:
+  # For the local demo only. Azure sets postgres.enabled=false and the
+  # connection string arrives from Key Vault — see Step 1b.
+  password: {{ required "postgres.password is required when postgres.enabled" .Values.postgres.password | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pjx-postgres-init
+data:
+  # POSTGRES_DB creates ONE database. Anything in this directory runs on first
+  # initialisation of the data directory, which is how the second one appears.
+  10-create-identity.sql: |
+    CREATE DATABASE pjx_identity OWNER pjx;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pjx-pgdata
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pjx-postgres-deployment
+  labels:
+    app: {{ .Values.postgres.appName }}
+spec:
+  # Single writer against one PVC. Never raise this.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.postgres.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.postgres.appName }}
+    spec:
+      containers:
+      - name: {{ .Values.postgres.appName }}
+        image: {{ .Values.postgres.image }}
+        imagePullPolicy: {{ .Values.postgres.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.postgres.resources | nindent 10 }}
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: {{ .Values.postgres.username | quote }}
+        - name: POSTGRES_DB
+          value: {{ .Values.postgres.database | quote }}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pjx-postgres
+              key: password
+        # The image writes into a subdirectory rather than the mount root,
+        # because a PVC root often contains lost+found and initdb refuses to
+        # run in a non-empty directory.
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.postgres.username }}"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.postgres.username }}"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pjx-pgdata
+      - name: init
+        configMap:
+          name: pjx-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # This name is the hostname the services connect to. Calling it "postgres"
+  # makes the connection string identical to Compose, where the compose service
+  # name resolves the same way.
+  name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Values.postgres.appName }}
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      name: postgres
+{{- end }}

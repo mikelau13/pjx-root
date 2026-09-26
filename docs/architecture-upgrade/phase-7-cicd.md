@@ -133,7 +133,7 @@ base64 for `password\r\n`. Base64 is encoding, not encryption, and this file is
 in a public repository.
 
 **Delete `helm-pjx/templates/pjx-secret.yaml` in this phase.** Nothing replaces
-it here — [Phase 10](phase-10-deployable.md) sources these from Key Vault via the
+it here — [Deployable](phase-deployable.md) sources these from Key Vault via the
 Secrets Store CSI driver. Removing it now means no deployment path can
 accidentally depend on it.
 
@@ -143,7 +143,7 @@ grep -rn 'pjx-secret' helm-pjx/    # → no remaining references
 ```
 
 > Deleting the file does not remove it from git history, and the repo is public.
-> Treat both passwords as compromised — they are `password` anyway. Phase 10
+> Treat both passwords as compromised — they are `password` anyway. Deployable
 > generates fresh material rather than reusing anything from the repo.
 
 ---
@@ -273,7 +273,7 @@ Note the registry moves from Docker Hub (`mikelauawaremd/`) to GHCR
 (`ghcr.io/mikelau13/`), matching where the CI in step 3 pushes.
 
 > `global.imageRegistry` is deliberately a value, not a constant. Decision D5
-> chose ACR for the AKS cluster, so [Phase 11](phase-11-deploy.md) overrides it
+> chose ACR for the AKS cluster, so [AKS Deploy](phase-aks-deploy.md) overrides it
 > with `--set global.imageRegistry=<acr>.azurecr.io` while local and CI keep
 > GHCR. `az acr import` copies images registry-to-registry, so the artifact
 > deployed is the artifact tested — no rebuild between the two.
@@ -419,7 +419,7 @@ spec:
 > as the Compose Traefik, so Phase 7b is comparing like with like.
 >
 > Revisit only after
-> [Phase 10's runtime configuration](phase-10-deployable.md#step-3--react-runtime-configuration)
+> [Deployable's runtime configuration](phase-deployable.md#step-3--react-runtime-configuration)
 > makes the frontend's URLs changeable at deploy time.
 
 `pjx-node-service` is included even though the browser does not call it directly —

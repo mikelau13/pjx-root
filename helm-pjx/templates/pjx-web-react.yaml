@@ -18,25 +18,52 @@ spec:
       - name: {{ .Values.web.appName }}
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.web) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.web.resources | nindent 10 }}
         # react-scripts start exits with code 0 when stdin closes. Compose sets
         # stdin_open: true for the same reason; these are the Kubernetes spelling.
         stdin: true
         tty: true
         ports:
-        - containerPort: 80
+        - containerPort: {{ .Values.web.service.port }}
+        # The dev image runs `react-scripts start`, which webpack-compiles at pod
+        # start — minutes, not seconds. Liveness at 20s + 3×30s kills it at ~110s,
+        # before the first compile finishes, so it restarts and recompiles forever.
+        # startupProbe holds liveness and readiness off until the server answers.
+        startupProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.web.service.port }}
+          periodSeconds: 10
+          failureThreshold: 60      # 10 minutes of compile budget
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /
-            port: 3000
+            port: {{ .Values.web.service.port }}
           initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /
-            port: 3000
+            port: {{ .Values.web.service.port }}
           initialDelaySeconds: 20
           periodSeconds: 30
           failureThreshold: 3
+          timeoutSeconds: 5
+        {{- if .Values.web.useNginx }}
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html/config.js
+          subPath: config.js
+        {{- end }}
+      {{- if .Values.web.useNginx }}
+      volumes:
+      - name: config
+        configMap:
+          name: pjx-web-config  # mount the pjx-web-config.yaml as config.js
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -48,6 +75,6 @@ spec:
     app: {{ .Values.web.appName }}
   ports:
     - protocol: TCP
-      port: 3000
-      targetPort: 3000
+      port: {{ .Values.web.service.port }}
+      targetPort: {{ .Values.web.service.port }}
       name: http  #adding name: http to each port lets the Ingress reference the port by name instead of number

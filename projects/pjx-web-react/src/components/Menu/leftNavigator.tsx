@@ -20,6 +20,7 @@ import CalendarTodayIcon from '@material-ui/icons/CalendarToday';
 import { Omit } from '@material-ui/types';
 import { IDENTITY_CONFIG } from '../../utils/authConst';
 import { AuthConsumer } from "../../providers/authProvider";
+import { config } from "../../utils/runtimeConfig";
 
 const styles = (theme: Theme) =>
   createStyles({
@@ -91,7 +92,7 @@ function LeftNavigator(props: LeftNavigatorProps & Omit<DrawerProps, 'classes'> 
       {
         main: 'My Account',
         children: [
-          { id: 'Profile', icon: <PersonAddIcon />, redirect: `${IDENTITY_CONFIG.profile}?returnUrl=${encodeURIComponent('' + process.env.REACT_APP_PUBLIC_URL)}` },
+          { id: 'Profile', icon: <PersonAddIcon />, redirect: `${IDENTITY_CONFIG.profile}?returnUrl=${encodeURIComponent('' + config.publicUrl)}` },
           { id: 'Sign Out', icon: <PowerOffIcon />, to: '/logout' },
         ],
       },
