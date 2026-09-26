@@ -764,6 +764,16 @@ Then add the env var to each Deployment's existing `env:` block —
 
 and the same in `pjx-sso-identityserver.yaml` with `key: sso-connection`.
 
+> **Superseded 2026-09-26 — the connection strings are in a Secret.** Copilot's
+> review of PR #30 pointed out the obvious: these are credentials, and they sat
+> in a ConfigMap next to a Secret (`pjx-postgres`) that already held the same
+> password. They now render into `templates/pjx-db-secret.yaml`, a Secret named
+> `pjx-db` with the same two keys, and both Deployments use `secretKeyRef`
+> instead of `configMapKeyRef`. `pjx-config` keeps `sso-authority` only. The
+> values files above are unchanged. Step 1b then swaps where `pjx-db` comes
+> from — the CSI driver syncing it from Key Vault — and the pod specs stay as
+> they are.
+
 > **The name is case-sensitive and must match exactly.** `ConnectionStrings__DefaultConnection`,
 > not `CONNECTIONSTRINGS__DEFAULTCONNECTION` and not a single underscore. A
 > wrong name is not an error — the variable is simply ignored and the service
@@ -883,6 +893,12 @@ kubectl -n pjx rollout restart deploy/pjx-postgres-deployment
 > This is the argument for `Migrate()` on startup in *both* services, which
 > [AKS Deploy](phase-aks-deploy.md) needs anyway — a deploy that requires a
 > human with `kubectl` is not continuous delivery.
+>
+> **Done 2026-09-26.** The API's `Program.cs` now calls `Database.Migrate()`
+> before `host.Run()`, the same shape as SSO. Verified by dropping
+> `pjx_calendar` in the cluster and rolling the pod — see
+> [7b](phase-7b-local-k8s.md#the-net-api-does-not-migrate-itself). The
+> port-forward recipe above is history.
 
 ### The cluster runs the image, and only the image (2026-09-13)
 

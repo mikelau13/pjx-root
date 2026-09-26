@@ -134,15 +134,19 @@ docker exec pjx-root-postgres-1 psql -U pjx -d pjx_calendar -c '\dt'
 ### Creating a database
 
 `POSTGRES_DB` in the compose service creates **one** database, on first
-initialisation of the volume only. A second one is manual:
+initialisation of the volume only. The second comes from
+`local/postgres/10-create-identity.sql`, mounted at
+`/docker-entrypoint-initdb.d` — the same file the chart carries as a ConfigMap,
+so the two runtimes cannot drift. It also runs only on first init, so a volume
+created before 2026-09-26 had `pjx_identity` created by hand:
 
 ```bash
 docker exec pjx-root-postgres-1 psql -U pjx -d pjx_calendar \
   -c 'CREATE DATABASE pjx_identity OWNER pjx;'
 ```
 
-Because it runs only on first init, editing `POSTGRES_DB` later does nothing
-until the volume is destroyed.
+Either way, editing `POSTGRES_DB` or the init script later does nothing until
+the volume is destroyed.
 
 > **`pjx-pgdata` now holds real data.** `docker compose down -v` and
 > `local/scripts/clean.sh` destroy it, taking the registered users and every

@@ -517,27 +517,44 @@ Helm merges maps, so overriding `resources` requires giving both `requests` and
 
 ### The .NET API does not migrate itself
 
+*(It does now — this records why it changed.)*
+
 SSO calls `Database.Migrate()` at startup (`Program.cs:53`), so `pjx_identity`
-had its 8 tables the first time the pod ran. The .NET API does not, so
-`pjx_calendar` was empty and every calendar call would have failed. Applied by
-hand, as Deployable's Step 2 notes anticipated:
+had its 8 tables the first time the pod ran. The .NET API did not, so
+`pjx_calendar` was empty while `/health/ready` reported healthy, and every
+calendar call would have failed. The first browser pass got through only after
+a by-hand `dotnet ef database update` over `kubectl port-forward` — a deploy
+that needs a human with `kubectl` is not continuous delivery, and Copilot's
+review of PR #30 flagged it twice.
+
+Fix, same day: the API's `Program.cs` builds the host, opens a scope, resolves
+`CalendarDbContext` and calls `Database.Migrate()` before `host.Run()` — the
+SSO shape. Proven the honest way:
 
 ```bash
-kubectl -n pjx port-forward svc/postgres 5432:5432     # terminal 1
-cd projects/pjx-api-dotnet/src/Pjx_Api                 # terminal 2
-dotnet ef database update \
-  --connection "Host=localhost;Database=pjx_calendar;Username=pjx;Password=password"
+kubectl -n pjx exec deploy/pjx-postgres-deployment -- psql -U pjx -d postgres \
+  -c 'DROP DATABASE pjx_calendar;' -c 'CREATE DATABASE pjx_calendar OWNER pjx;'
+docker compose -f docker-compose.devcontainer.yml build pjx-api-dotnet
+k3d image import pjx-root-pjx-api-dotnet:latest -c pjx
+kubectl -n pjx rollout restart deploy/pjx-dotnet-deployment
 ```
 
-`--connection` overrides `appsettings.json` for the one run. `localhost` works
-here, where it did not in Step 2, because port-forward listens on the
-devcontainer's own loopback, which is where `dotnet ef` runs; the devcontainer
-is on the `k3d-pjx` node network, not the cluster's Service network, so
-`Host=postgres` would not resolve.
+The new pod logged `Applying pending migrations...`, and `__EFMigrationsHistory`
+listed `InitialPostgres` with zero rows in `CalendarEvents`. Two consequences
+worth knowing:
 
-This is the wrong shape for AKS — a deploy that needs a human with `kubectl` is
-not continuous delivery. `Database.Migrate()` in the API's startup, matching
-SSO, goes on the [AKS Deploy](phase-aks-deploy.md) list.
+- **A pod that cannot reach the database now crashes at startup** instead of
+  coming up healthy with no tables. In Kubernetes that is a restart loop until
+  Postgres answers, which is the right behaviour. On Compose it is why
+  `docker-compose.devcontainer.yml` gained a `pg_isready` healthcheck and
+  `depends_on: condition: service_healthy` on both .NET services.
+- **`Migrate()` is not safe for two replicas starting at once.** Fine at
+  `replicas: 1` and for the demo; the production shape is an init container or
+  a Job that runs once per deploy.
+
+`kubectl logs deploy/<name>` picks *a* pod, and during a rollout that is often
+the old one — `Found 2 pods, using pod/...` in the output means look again with
+the new pod's name.
 
 ---
 

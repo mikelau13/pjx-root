@@ -24,7 +24,7 @@ the project, and a number that contradicts the plan is worse than no number. The
 | 8 | [7 — Helm chart cleanup](phase-7-cicd.md) | ✅ committed — one routing mechanism, named ports, `pjx.image`, per-environment values |
 | 9 | [7b — Local Kubernetes (k3d)](phase-7b-local-k8s.md) | ✅ **full browser pass on k3d** — register, activate, login, `/country/all`, `/cities`, sign out |
 | 10 | [7c — CI/CD to GHCR](phase-7c-cicd.md) | ✅ **green on GHCR** — five production images build and push; chart published as `oci://ghcr.io/mikelau13/charts/pjx:0.2.0` at tag `v0.2.0` |
-| 11 | [Deployable](phase-deployable.md) | ← **next** — the local work: EF Core 8, React runtime config, resource limits, chart parity. Prove it on k3d; **no Azure needed** |
+| 11 | [Deployable](phase-deployable.md) | ⚠️ **local rows done 2026-09-26** — EF Core 8, PostgreSQL in both services and in the chart, React runtime config, resource limits; chart passes 7b Verify on k3d. Steps 1a/1b/6 wait on Azure |
 | 12 | [Azure Foundation](phase-azure-foundation.md) | after Deployable — first Azure spend (~$60–70/month running). Provision it when you are days from deploying, not weeks |
 | 13 | [AKS Deploy](phase-aks-deploy.md) | |
 | 14 | [Duende — then go public](phase-duende.md) | optional |
@@ -44,17 +44,18 @@ already have, before any of it costs money.
 | Item | From | Blocks | Close by |
 |---|---|---|---|
 | [`react-scripts` 3.4.3 pins the React image to EOL Node 14](phase-6-devcontainer-image.md#validatesh-build-pjx-web-react-fails-on-node-18--fix-it-in-the-script) | 6 | **Deployable** — `REACT_APP_*` runtime config has the same root cause | [Deployable Step 3](phase-deployable.md#step-3--react-runtime-configuration) |
-| [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before 10 |
-| [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before 10 |
-| Chart sets ~8 env vars; Compose sets 31 | 7b | nothing yet | 10 |
-| Dev images run in the cluster — `dotnet watch` and webpack compile at pod startup | 7b | nothing yet | 10 |
-| No automated browser test — every CORS bug this phase was invisible to `curl` | 7b | nothing yet | 10 |
+| [No log pipeline — Loki is empty](phase-5-otel.md#outstanding--no-log-pipeline) | 5 | nothing | before AKS Deploy |
+| [No cross-service traces](phase-5-otel.md#outstanding--no-cross-service-traces) | 5 | nothing | before AKS Deploy |
+| Chart sets ~8 env vars; Compose sets 31 | 7b | nothing yet | before AKS Deploy |
+| Dev images run in the cluster — `dotnet watch` and webpack compile at pod startup | 7b | nothing yet | before AKS Deploy |
+| No automated browser test — every CORS bug this phase was invisible to `curl` | 7b | nothing yet | before AKS Deploy |
 | React Service port is hardcoded `3000` (CRA dev server); the production image is nginx on `80` | 7c | **deploying CI-built images** — 502 until it is a value | [Deployable Step 3](phase-deployable.md#step-3--react-runtime-configuration) |
-| `Pjx_Api_Test` contains only a `.csproj`, and every repository call in `OverlappingCheckTests` is a Moq `.Setup(...)` — **no .NET test executes a real query**. Twelve tests stayed green over the LINQ bug that broke event creation | 7c, 4 | nothing — but CI green means less than it looks | before 9 |
+| `Pjx_Api_Test` contains only a `.csproj`, and every repository call in `OverlappingCheckTests` is a Moq `.Setup(...)` — **no .NET test executes a real query**. Twelve tests stayed green over the LINQ bug that broke event creation | 7c, 4 | nothing — but CI green means less than it looks | before Azure Foundation |
 | `dotnet watch` cannot see host edits — inotify does not cross the bind mount, and neither .NET service sets `DOTNET_USE_POLLING_FILE_WATCHER`. The Node services already carry `CHOKIDAR_USEPOLLING=true` | 4 | every .NET source edit needs a manual container restart | **quick fix, do it now** |
 | Root-owned `bin/`/`obj/` in the bind mount — the .NET dev containers run as root, so MSBuild fails with `MSB3021`/`MSB3231` until `chown`ed from the host. Recurs on every `make up` | 4, 7c | blocks `dotnet build` intermittently | a `user:` mapping on the two .NET services |
-| Apollo and node-api production images are single-stage and larger than their dev images; no `.dockerignore` on four of five projects | 7c | nothing | before 10 |
-| Apollo's production image runs `nodemon` with `--inspect=4555` — a file watcher and open debugger port | 7c | nothing yet | 10 |
+| Apollo and node-api production images are single-stage and larger than their dev images; no `.dockerignore` on four of five projects | 7c | nothing | before AKS Deploy |
+| Apollo's production image runs `nodemon` with `--inspect=4555` — a file watcher and open debugger port | 7c | nothing yet | before AKS Deploy |
+| `NOTES.txt` still prints the original repo's `*.pjx.com` / minikube / NodePort text and "Register not working because of CORS" — the first thing anyone sees after `helm install`, none of it true | 7 | nothing | before AKS Deploy |
 
 Phase 7b's items are all the same underlying fact: **the cluster runs the
 `Dockerfile.dev` images.** Consequences seen while getting the browser pass to
