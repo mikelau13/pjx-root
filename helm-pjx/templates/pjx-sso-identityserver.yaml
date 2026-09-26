@@ -54,8 +54,8 @@ spec:
           value: https://sso.{{ .Values.ingress.host }}
         - name: ConnectionStrings__DefaultConnection
           valueFrom:
-            configMapKeyRef:
-              name: pjx-config
+            secretKeyRef:
+              name: pjx-db
               key: sso-connection
 ---
 apiVersion: v1

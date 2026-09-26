@@ -43,8 +43,8 @@ spec:
               key: sso-authority
         - name: ConnectionStrings__DefaultConnection
           valueFrom:
-            configMapKeyRef:
-              name: pjx-config
+            secretKeyRef:
+              name: pjx-db
               key: dotnet-connection
 
 ---
