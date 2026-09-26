@@ -66,6 +66,9 @@ services:
       start_period: 30s
 
   pjx-api-dotnet:
+    depends_on:
+      postgres:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
@@ -117,6 +120,15 @@ services:
       POSTGRES_DB: pjx_calendar
     volumes:
       - pjx-pgdata:/var/lib/postgresql/data
+      - ./local/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -d matters: pg_isready without it succeeds during initdb's temporary
+      # single-user phase, before the init scripts have run.
+      test: ["CMD", "pg_isready", "-U", "pjx", "-d", "pjx_calendar"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     networks: [pjx-network]
 
 
@@ -195,6 +207,9 @@ services:
       start_period: 30s
 
   pjx-sso-identityserver:
+    depends_on:
+        postgres:
+          condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=pjx-public"
