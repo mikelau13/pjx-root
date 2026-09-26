@@ -164,8 +164,33 @@ kubectl config set-cluster k3d-pjx --server=https://k3d-pjx-serverlb:6443
 | Event | Redo needed |
 |---|---|
 | `k3d cluster stop` / `start` | none — names and network survive |
-| Devcontainer rebuild | `docker network connect` again |
+| Devcontainer rebuild | **the network, and the kubeconfig from scratch** — see below |
 | `k3d cluster delete` + recreate | **both** — new network and a new random API port |
+
+> **A devcontainer rebuild takes the kubeconfig with it.** Nothing mounts
+> `~/.kube` — `docker-compose.devcontainer.yml:20-22` gives the workspace the
+> repo, the Docker socket and nothing else — so the file lives only in the
+> container's writable layer. After a rebuild `/root/.kube` does not exist at
+> all, and `set-cluster` has nothing to patch:
+>
+> ```
+> error: current-context is not set
+> ```
+>
+> Write it before patching it:
+>
+> ```bash
+> k3d kubeconfig merge pjx --kubeconfig-merge-default
+> kubectl config set-cluster k3d-pjx --server=https://k3d-pjx-serverlb:6443
+> ```
+>
+> `merge` also switches context — `--kubeconfig-switch-context` defaults to
+> true — so no `use-context` is needed. What it writes is k3d's own `0.0.0.0`
+> address, which is why `set-cluster` still has to follow it.
+>
+> `kubectl`, `helm` and `k3d` are baked into the devcontainer image and survive
+> a rebuild. Anything installed by hand does not — `dotnet-ef` is the one that
+> bites, because the .NET API's migrations need it.
 
 The random port is avoidable — pin it at creation so the kubeconfig stops
 changing every time the cluster is recreated:

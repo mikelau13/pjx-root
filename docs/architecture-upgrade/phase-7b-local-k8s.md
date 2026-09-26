@@ -287,7 +287,7 @@ ssoUrl: http://pjx-sso-service:80
 > wrong in this phase:
 >
 > ```bash
-> helm template pjx-release helm-pjx/ -f helm-pjx/environments/local.yaml \
+> helm template pjx helm-pjx/ -f helm-pjx/environments/local.yaml \
 >   | grep -oE 'image: [^ ]+' | sed 's/image: //' | sort
 > docker images --format '{{.Repository}}:{{.Tag}}' | grep '^pjx-root-pjx' | sort
 > ```
@@ -352,12 +352,12 @@ service, using each one's own path and container port:
 Render and read it first:
 
 ```bash
-helm template pjx-release helm-pjx/ -f helm-pjx/environments/local.yaml > /tmp/local.yaml
+helm template pjx helm-pjx/ -f helm-pjx/environments/local.yaml > /tmp/local.yaml
 less /tmp/local.yaml
 ```
 
 ```bash
-helm upgrade --install pjx-release helm-pjx/ \
+helm upgrade --install pjx helm-pjx/ \
   --namespace pjx --create-namespace \
   -f helm-pjx/environments/local.yaml \
   --atomic --timeout 5m
@@ -382,11 +382,15 @@ k9s -n pjx                                  # interactive, faster for browsing
 Most likely first failures:
 
 1. **`ImagePullBackOff`** — image not imported, or `imagePullPolicy: Always`
-2. **`CrashLoopBackOff` on the .NET services** — SQLite path not writable in the
-   container, or the connection string points somewhere that does not exist
-3. **Probe failures during startup** — .NET cold start exceeding
-   `initialDelaySeconds`; raise it rather than assuming the app is broken
-4. **Ingress 404** — `className` not matching k3s's Traefik, or the host not
+2. **`CrashLoopBackOff` on the .NET services** — the connection string points
+   somewhere that does not exist, or `pjx_calendar` has no tables (see
+   [migrations](#the-net-api-does-not-migrate-itself) below)
+3. **Probe failures during startup** — a dev image compiling at pod start
+   exceeds the liveness budget; add a `startupProbe`, do not raise
+   `initialDelaySeconds` (see [how it actually went](#how-it-actually-went-2026-09-26))
+4. **`OOMKilled`** — `kubectl top pod` shows the container pinned at its memory
+   limit; the limit was sized for a different image
+5. **Ingress 404** — `className` not matching k3s's Traefik, or the host not
    matching `/etc/hosts`
 
 ---
@@ -433,20 +437,114 @@ AKS deploy is "the same thing, elsewhere" rather than a first attempt.
 
 ### Expect these, do not debug them
 
-- **Data vanishes on pod restart.** SQLite in an ephemeral container.
-  [Deployable](phase-deployable.md) replaces it with PostgreSQL.
-- **The signing certificate is the committed one.** Insecure, local only — also
-  Deployable.
+- ~~**Data vanishes on pod restart.** SQLite in an ephemeral container.~~
+  Superseded 2026-09-13: Deployable Step 5b put PostgreSQL in the chart, on a
+  2Gi PVC that survives pod restarts and `k3d cluster stop`.
+- **The signing certificate is the committed one.** Insecure, local only —
+  Deployable Step 1a/1b, after Azure Foundation.
 - **No telemetry reaches Grafana** unless you point
   `OTEL_EXPORTER_OTLP_ENDPOINT` at something reachable from the cluster. The
   Compose Grafana is on `pjx-network`, which k3s pods are not.
 
 ---
 
+## How it actually went (2026-09-26)
+
+Verify passed: six pods Ready, the mkcert certificate served by k3s's Traefik,
+every hostname answering, and the full browser pass — register, activate, log
+in, create an event — against the cluster's PostgreSQL. Three things were not in
+the plan.
+
+### The release is named `pjx`
+
+The chart was first installed as `helm install pjx` on 2026-09-13, but this
+document said `pjx-release`. `helm upgrade --install` with an unknown name is a
+fresh install, and it refused because every object already carries
+`meta.helm.sh/release-name: pjx`:
+
+```
+Secret "pjx-postgres" in namespace "pjx" exists and cannot be imported into the
+current release: invalid ownership metadata; ... key "meta.helm.sh/release-name"
+must equal "pjx-release": current value is "pjx"
+```
+
+Nothing changes when this happens — helm aborts before touching the cluster.
+`helm -n pjx list` is the source of truth for the name, and the commands above
+now use it.
+
+### The React dev image needs a `startupProbe`, and four times the memory
+
+The React pod had been crash-looping since 2026-09-13 — two ReplicaSets, 59 and
+68 restarts, the rollout never completing because the new pod never went Ready.
+Two causes, one after the other, both the same mistake: `values.yaml` describes
+the **nginx** production image serving static files, and `local.yaml` swaps in
+the **dev** image, which runs `react-scripts start` and webpack-compiles at pod
+start.
+
+```mermaid
+sequenceDiagram
+    participant K as kubelet
+    participant P as React pod
+    Note over P: webpack compiling…
+    K->>P: liveness GET / (t=20s)
+    P-->>K: no answer (timeout 1s)
+    K->>P: liveness GET / (t=50s, 80s)
+    P-->>K: no answer
+    K->>P: kill, restart (t≈110s)
+    Note over P: compile starts over — forever
+```
+
+1. **Liveness killed the compile.** `initialDelaySeconds: 20`, `periodSeconds:
+   30`, `failureThreshold: 3` gives about 110 seconds; the compile takes longer
+   under a 500m CPU limit. Each kill restarted the compile from zero. The
+   symptom in `describe pod` was `Liveness probe failed: ... context deadline
+   exceeded` — the default `timeoutSeconds` is 1 second. Fix in
+   `templates/pjx-web-react.yaml`: a `startupProbe` with `failureThreshold: 60`
+   × `periodSeconds: 10`, which suspends liveness and readiness until the server
+   first answers, plus `timeoutSeconds: 5` on all three probes. Raising
+   `initialDelaySeconds` instead would have been a guess that fails again on a
+   slower machine.
+2. **Then memory.** With the probe fixed the pod lived long enough to be
+   `OOMKilled` at the 512Mi limit, with CPU pinned at 500m. At steady state,
+   after the compile, `kubectl top pod` shows the dev image at **644Mi** — it
+   was never going to fit. Fix in `environments/local.yaml`: `web.resources`
+   overridden to 2Gi / 2 CPU. With the CPU unthrottled the compile took 40
+   seconds and the pod was Ready on the first attempt. The production image
+   keeps the small numbers in `values.yaml`.
+
+Helm merges maps, so overriding `resources` requires giving both `requests` and
+`limits`, or the untouched half keeps the production values.
+
+### The .NET API does not migrate itself
+
+SSO calls `Database.Migrate()` at startup (`Program.cs:53`), so `pjx_identity`
+had its 8 tables the first time the pod ran. The .NET API does not, so
+`pjx_calendar` was empty and every calendar call would have failed. Applied by
+hand, as Deployable's Step 2 notes anticipated:
+
+```bash
+kubectl -n pjx port-forward svc/postgres 5432:5432     # terminal 1
+cd projects/pjx-api-dotnet/src/Pjx_Api                 # terminal 2
+dotnet ef database update \
+  --connection "Host=localhost;Database=pjx_calendar;Username=pjx;Password=password"
+```
+
+`--connection` overrides `appsettings.json` for the one run. `localhost` works
+here, where it did not in Step 2, because port-forward listens on the
+devcontainer's own loopback, which is where `dotnet ef` runs; the devcontainer
+is on the `k3d-pjx` node network, not the cluster's Service network, so
+`Host=postgres` would not resolve.
+
+This is the wrong shape for AKS — a deploy that needs a human with `kubectl` is
+not continuous delivery. `Database.Migrate()` in the API's startup, matching
+SSO, goes on the [AKS Deploy](phase-aks-deploy.md) list.
+
+---
+
 ## Rollback
 
 ```bash
-helm -n pjx uninstall pjx-release      # remove the app, keep the cluster
+helm -n pjx uninstall pjx              # remove the app, keep the cluster
 k3d cluster stop pjx                   # keep it for later, frees the ports
 k3d cluster delete pjx                 # remove entirely
 ```

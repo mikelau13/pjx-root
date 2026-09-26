@@ -17,10 +17,10 @@ To run `pjx-root` you will need the following projects:
 - [pjx-api-dotnet](https://github.com/mikelau13/pjx-api-dotnet) - Api backend developed with DotNet Core 3.1 to fetch data and manage business logic.
 
 Architecture overview looks like this: 
-![pjx Architecture Overview](/images/pjx-overview.png)
+![pjx Architecture Overview](images/pjx-overview.png)
 
 Kubernetes Cluster looks like this: 
-![pjx Kubernetes Deployment](/images/pjx-Deployment.png)
+![pjx Kubernetes Deployment](images/pjx-Deployment.png)
 
 
 #### Plant UML (Auto converted by Cluade.Ai)
@@ -83,7 +83,7 @@ WebReactLogin -right-> MVC : "redirect"
 @enduml
 -->
 
-![](/images/pjx-overview.svg)
+![](images/pjx-overview.svg)
 
 
 ## Installation
@@ -177,6 +177,14 @@ leaves it alone — it only starts the things VS Code will not.
 > VS Code. First run on a new machine needs
 > [Prerequisites](#1-prerequisites-on-the-host) and
 > [TLS certificates](#3-generate-tls-certificates-first-time-only) below.
+>
+> Coming back to the **k3d cluster** instead takes four commands, not one — a
+> devcontainer rebuild silently drops the kubeconfig and the cluster network
+> attachment, so `kubectl` fails against a cluster that is running perfectly
+> well. The cold start is in
+> [operating-the-stack.md](docs/reference/operating-the-stack.md#when-kubectl-cannot-reach-a-cluster-that-is-running).
+> Remember that Compose and k3d cannot run at the same time; both want ports 80
+> and 443.
 
 ---
 
@@ -293,29 +301,29 @@ helm install pjx-release helm-pjx/
 Visit <https://pjx.test> to try the website. A few sanity checks:
 
 - register a new account - verify if the web app `client side` is consuming the `Identity Server API`, with `SSL` and `CoRS` settings, properly or not
-<br/><img src="/images/user_registration.png" alt="pjx user registration" style="max-width: 60%;" />
+<br/><img src="images/user_registration.png" alt="pjx user registration" style="max-width: 60%;" />
 
 - activate your account - since this project is for demo purpose, you will not receive the activation email, instead, after registration, check the command logs to find the activation code to active your account 
-<br/><img src="/images/account_registered.png" alt="pjx user registered" style="max-width: 60%;" />
-<br/><img src="/images/account_validated.png" alt="pjx user validated" style="max-width: 60%;" />
+<br/><img src="images/account_registered.png" alt="pjx user registered" style="max-width: 60%;" />
+<br/><img src="images/account_validated.png" alt="pjx user validated" style="max-width: 60%;" />
 - login
-<br/><img src="/images/user_login.png" alt="pjx user login" style="max-width: 50%;" />
+<br/><img src="images/user_login.png" alt="pjx user login" style="max-width: 50%;" />
 
 - on the site menu, visit the `/country/all` page - this will verify the connectivity with the .NET Core API, which will authenticate the connection with the Identity Server on the  `backend` side
 - on the left/hamburger menu, visit the `/cities` page - it will verify the Apollo Server and the Restify API
 - on the left/hamburger menu, visit the `Profile` page - it will verify the Identity Server MVC
 - Calendar - CURD
-<br/><img src="/images/calendar.png" alt="pjx calendar" style="max-width: 70%;" />
+<br/><img src="images/calendar.png" alt="pjx calendar" style="max-width: 70%;" />
 - Sign Out
-<br/><img src="/images/user_signout.png" alt="pjx user signout" style="max-width: 50%;" />
+<br/><img src="images/user_signout.png" alt="pjx user signout" style="max-width: 50%;" />
 
 - visit the GraphQL playground of the Apollo Server - https://ql.pjx.test
-![pjx graphql playground](/images/apollo_query.png)
+![pjx graphql playground](images/apollo_query.png)
 - try out the Swagger of the .NET Core API - https://api.pjx.test/swagger/
-![pjx api swagger](/images/api_swagger.png)
+![pjx api swagger](images/api_swagger.png)
 - try out the Swagger of the Identity Server - https://sso.pjx.test/swagger
-![pjx sso swagger](/images/identityserver_swagger.png)
+![pjx sso swagger](images/identityserver_swagger.png)
 - try out the responsive HTML design by changing the browser size
-![pjx html responsive](/images/mobile_desktop.png)
+![pjx html responsive](images/mobile_desktop.png)
 
 

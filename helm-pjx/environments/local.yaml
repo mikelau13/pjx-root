@@ -15,7 +15,17 @@ global:
 # daemon are pjx-root-pjx-web-react, not pjx-web-react. Override the
 # repository here rather than in values.yaml — the prefix is an artifact of local
 # Compose builds and is wrong for GHCR and ACR.
-web:       { replicas: 1, useNginx: false, image: { repository: pjx-root-pjx-web-react }, service: { port: 3000 } }
+web:
+  replicas: 1
+  useNginx: false
+  image: { repository: pjx-root-pjx-web-react }
+  service: { port: 3000 }
+  # values.yaml's 512Mi/500m fit the nginx image serving static files. The dev
+  # image webpack-compiles at pod start and was OOMKilled at 510Mi with the CPU
+  # pinned at the limit. Local only — the production image keeps the small numbers.
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: 2,    memory: 2Gi }
 apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
 nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
 dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }

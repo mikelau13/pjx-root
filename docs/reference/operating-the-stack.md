@@ -157,22 +157,25 @@ What differs is the loop around it, and how much of the stack exists at all.
 | | `make up` (Compose) | k3d cluster |
 |---|---|---|
 | Source changes | bind-mounted; `dotnet watch` / CRA reload in seconds | no bind mount — build, `k3d image import`, `rollout restart`, ~4 min |
-| Startup | fast | dev images compile *at pod start*; the .NET API has taken ~10 min and 3 restarts, liveness probes killing it mid-build |
-| Database | `pjx-root-postgres-1` on `pjx-network` | **none** — no postgres template in the chart |
-| Configuration | 34 env lines in `docker-compose.devcontainer.yml` | `pjx-config` ConfigMap, one key (`sso-authority`) |
+| Startup | fast | dev images compile *at pod start*; React needs a `startupProbe` and 2Gi to survive it — [7b](../architecture-upgrade/phase-7b-local-k8s.md#how-it-actually-went-2026-09-26) |
+| Database | `pjx-root-postgres-1` on `pjx-network` | `pjx-postgres-deployment`, 2Gi PVC, created by the chart (Step 5b) |
+| Configuration | 34 env lines in `docker-compose.devcontainer.yml` | `pjx-config` ConfigMap — `sso-authority` plus the two connection strings |
 | Observability | `pjx-grafana-otel` | not deployed |
 | Routing | standalone Traefik, Docker labels | k3s's built-in Traefik, Ingress rules |
 | URLs and ports | identical | identical, by design |
 
-> **As of 2026-09-12 the cluster cannot reach a database.** The chart has no
-> postgres template, and `appsettings.json` now says `Host=postgres` — a name
-> that resolves on the Compose network and nowhere in the cluster. Starting k3d
-> today gives an app that boots and fails every query.
+> **Superseded 2026-09-13 — the chart has a database now.** Step 5b added
+> `helm-pjx/templates/pjx-postgres.yaml`: a Deployment, a Service named
+> `postgres` so `Host=postgres` resolves in the cluster as well as on the
+> Compose network, a 2Gi PVC, and an init ConfigMap that creates `pjx_calendar`
+> and `pjx_identity`.
 >
-> The chart also still points at the **dev** images (`pjx-root-*` in
-> `environments/local.yaml:18-22`), which is what makes pod startup so slow.
-> Both are [Deployable](../architecture-upgrade/phase-deployable.md)'s work to
-> close. Until then, develop on Compose; k3d is for proving the chart at the end.
+> The chart still points at the **dev** images (`pjx-root-*` in
+> `environments/local.yaml:18-22`), which is what makes pod startup so slow —
+> and those images carry a *frozen copy* of the source, because there is no bind
+> mount in Kubernetes. Develop on Compose; k3d is for proving the chart. See
+> [the cluster runs the image, and only the
+> image](../architecture-upgrade/phase-deployable.md#the-cluster-runs-the-image-and-only-the-image-2026-09-13).
 
 ## The k3d cluster, when you want it
 
@@ -200,9 +203,42 @@ What differs is the loop around it, and how much of the stack exists at all.
 k3d cluster list                    # in the devcontainer; k3d is not on the host
 k3d cluster start pjx
 kubectl config use-context k3d-pjx
+kubectl get nodes                   # gate — nothing below works until this does
 kubectl -n pjx get pods
 kubectl -n pjx logs deploy/pjx-sso-deployment
 k9s -n pjx                          # terminal UI
 ```
 
 `make down` stops the cluster along with everything else.
+
+### When `kubectl` cannot reach a cluster that is running
+
+Two of the four things a working `kubectl` needs live in the **devcontainer**,
+not in the cluster, so they survive `k3d cluster stop/start` but not a
+devcontainer rebuild — and VS Code rebuilds it on its own schedule.
+
+| Symptom | What is missing |
+|---|---|
+| `error: current-context is not set` | the kubeconfig — `~/.kube` is not mounted, so a rebuild takes it |
+| `dial tcp: lookup k3d-pjx-serverlb` | the devcontainer's attachment to the `k3d-pjx` network |
+| `dial tcp 0.0.0.0:<port>: connection refused` | the kubeconfig still holds the host-side address k3d wrote |
+| `ErrImageNeverPull` on every pod | the images — only after a `k3d cluster delete`, not a rebuild |
+
+Cold start from a freshly rebuilt devcontainer, in this order:
+
+```bash
+k3d cluster start pjx
+docker network connect k3d-pjx pjx-root-workspace-1
+k3d kubeconfig merge pjx --kubeconfig-merge-default
+kubectl config set-cluster k3d-pjx --server=https://k3d-pjx-serverlb:6443
+kubectl get nodes
+```
+
+`merge` writes the file and switches context; `set-cluster` then repoints it
+from `0.0.0.0` at the load balancer's container name, which is a SAN on the API
+server certificate, so TLS verification still passes. Full reasoning in
+[k3d-networking.md](k3d-networking.md#the-fix-and-when-it-needs-redoing).
+
+Exited nodes are not a deleted cluster — `docker ps -a` showing
+`k3d-pjx-server-0  Exited` means the images, the `pjx-pgdata` PVC and the helm
+release are all still there, and `k3d cluster start` gets them back.

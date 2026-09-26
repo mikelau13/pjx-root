@@ -26,12 +26,24 @@ spec:
         tty: true
         ports:
         - containerPort: {{ .Values.web.service.port }}
+        # The dev image runs `react-scripts start`, which webpack-compiles at pod
+        # start — minutes, not seconds. Liveness at 20s + 3×30s kills it at ~110s,
+        # before the first compile finishes, so it restarts and recompiles forever.
+        # startupProbe holds liveness and readiness off until the server answers.
+        startupProbe:
+          httpGet:
+            path: /
+            port: {{ .Values.web.service.port }}
+          periodSeconds: 10
+          failureThreshold: 60      # 10 minutes of compile budget
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /
             port: {{ .Values.web.service.port }}
           initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
         livenessProbe:
           httpGet:
             path: /
@@ -39,6 +51,7 @@ spec:
           initialDelaySeconds: 20
           periodSeconds: 30
           failureThreshold: 3
+          timeoutSeconds: 5
         {{- if .Values.web.useNginx }}
         volumeMounts:
         - name: config

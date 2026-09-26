@@ -51,10 +51,10 @@ free work first:
 |---|---|---|
 | ~~1~~ | ✅ **done 2026-09-07** — [EF Core 3.1.7 → 8](phase-4-dotnet8.md#how-it-actually-went-2026-09-07), Step 2's prerequisite. One real LINQ regression, found and fixed | no |
 | ~~2~~ | ✅ **done 2026-09-12** — [Step 3](#step-3--react-runtime-configuration) React runtime config, ConfigMap mounted via `subPath`, React port a chart value | no |
-| 3 | [Step 5](#step-5--resource-requests-and-limits) — resource requests and limits. ⚠️ **half done as of 2026-09-13**: `values.yaml` declares all five blocks, no template reads them | no |
-| 4 | [Step 1c](#step-1c--one-small-code-change-no-azure-needed) — the `Path.IsPathRooted` edit, on its own | no |
+| ~~3~~ | ✅ **done 2026-09-13** — [Step 5](#step-5--resource-requests-and-limits) resource requests and limits, every template reads its block. The React dev image needs a local override — see [7b](phase-7b-local-k8s.md#how-it-actually-went-2026-09-26) | no |
+| ~~4~~ | ✅ **done 2026-09-13** — [Step 1c](#step-1c--one-small-code-change-no-azure-needed), the `Path.IsPathRooted` edit, landed with Step 2 | no |
 | ~~5~~ | ✅ **done 2026-09-13** — [Step 2](#step-2--sqlite--postgresql) SQLite → PostgreSQL, both services, on `postgres:16-alpine`. Browser-verified | no |
-| 5b | **The chart has no PostgreSQL** — added below, new 2026-09-13 | no |
+| ~~5b~~ | ✅ **done 2026-09-13** — [Step 5b](#step-5b--the-chart-has-no-database) PostgreSQL in the chart. Verified end to end on k3d 2026-09-26 | no |
 | — | **[Azure Foundation](phase-azure-foundation.md) — provision Azure here** | — |
 | 6 | [Step 1a](#step-1a--generate-and-store-after-phase-9) + [Step 1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9) — store the certificate and mount it | **yes** |
 | 7 | [Step 6](#step-6--observability-wiring) — the Grafana Cloud header comes from Key Vault | **yes** |
