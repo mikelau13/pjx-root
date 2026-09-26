@@ -52,6 +52,8 @@ spec:
           value: https://{{ .Values.ingress.host }}
         - name: PJX_SSO__PUBLIC_ORIGIN
           value: https://sso.{{ .Values.ingress.host }}
+        - name: Email__LocalDomain
+          value: https://{{ .Values.ingress.host }}
         - name: ConnectionStrings__DefaultConnection
           valueFrom:
             secretKeyRef:

@@ -241,6 +241,7 @@ services:
       - PJX_SSO__CERTIFICATE=pjx-sso-identityserver.rsa_2048.cert.pfx
       - PJX_SSO__PASSWORD=password
       - PJX_CORS_ORIGINS=https://pjx.test
+      - Email__LocalDomain=https://pjx.test
       - ConnectionStrings__DefaultConnection=Host=postgres;Database=pjx_identity;Username=pjx;Password=password
       - DOTNET_USE_POLLING_FILE_WATCHER=1
     healthcheck:
