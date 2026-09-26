@@ -4,3 +4,5 @@ metadata:
   name: pjx-config
 data:
   sso-authority: {{ .Values.ssoUrl }}
+  dotnet-connection: {{ .Values.connectionStrings.dotnetApi | quote }}
+  sso-connection:    {{ .Values.connectionStrings.sso | quote }}

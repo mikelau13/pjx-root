@@ -20,6 +20,8 @@ apollo:    { replicas: 1, image: { repository: pjx-root-pjx-graphql-apollo } }
 nodeApi:   { replicas: 1, image: { repository: pjx-root-pjx-api-node } }
 dotnetApi: { replicas: 1, image: { repository: pjx-root-pjx-api-dotnet } }
 sso:       { replicas: 1, image: { repository: pjx-root-pjx-sso-identityserver } }
+postgres:  { enabled: true, password: password }
+
 
 ingress:
   enabled: true
@@ -31,6 +33,8 @@ ingress:
     # not cert-manager. Covers *.pjx.test and pjx.test, so every hostname works
     # and the host browser already trusts the CA.
     secretName: pjx-tls
-
+connectionStrings:
+  dotnetApi: "Host=postgres;Database=pjx_calendar;Username=pjx;Password=password"
+  sso:       "Host=postgres;Database=pjx_identity;Username=pjx;Password=password"
 # The .NET API reaches SSO over in-cluster Service DNS.
 ssoUrl: http://pjx-sso-service:80

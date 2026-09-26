@@ -57,5 +57,21 @@ ingress:
   tls:
     enabled: false
     secretName: ""
-
+postgres:
+  enabled: false          # Azure uses a managed server; see Azure Foundation
+  imagePullPolicy: IfNotPresent   # upstream image, not built by this repo —
+                                    # must not inherit global's Never on k3d
+  appName: pjx-postgres
+  image: postgres:16-alpine
+  username: pjx
+  database: pjx_calendar
+  storage: 2Gi
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+connectionStrings:
+  # Overridden per environment. In Azure these name the managed server and the
+  # password comes from Key Vault, not from here.
+  dotnetApi: ""
+  sso: ""
 ssoUrl: http://pjx-sso-service:80

@@ -18,6 +18,8 @@ spec:
       - name: pjx-sso
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.sso) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.sso.resources | nindent 10 }}
         ports:
         - containerPort: 5002
         readinessProbe:
@@ -50,6 +52,11 @@ spec:
           value: https://{{ .Values.ingress.host }}
         - name: PJX_SSO__PUBLIC_ORIGIN
           value: https://sso.{{ .Values.ingress.host }}
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            configMapKeyRef:
+              name: pjx-config
+              key: sso-connection
 ---
 apiVersion: v1
 kind: Service

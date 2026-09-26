@@ -50,10 +50,11 @@ free work first:
 | Do | What | Needs Azure |
 |---|---|---|
 | ~~1~~ | ✅ **done 2026-09-07** — [EF Core 3.1.7 → 8](phase-4-dotnet8.md#how-it-actually-went-2026-09-07), Step 2's prerequisite. One real LINQ regression, found and fixed | no |
-| 2 | [Step 3](#step-3--react-runtime-configuration) — React runtime config, plus making the React Service port a chart value | no |
-| 3 | [Step 5](#step-5--resource-requests-and-limits) — resource requests and limits | no |
+| ~~2~~ | ✅ **done 2026-09-12** — [Step 3](#step-3--react-runtime-configuration) React runtime config, ConfigMap mounted via `subPath`, React port a chart value | no |
+| 3 | [Step 5](#step-5--resource-requests-and-limits) — resource requests and limits. ⚠️ **half done as of 2026-09-13**: `values.yaml` declares all five blocks, no template reads them | no |
 | 4 | [Step 1c](#step-1c--one-small-code-change-no-azure-needed) — the `Path.IsPathRooted` edit, on its own | no |
-| 5 | [Step 2](#step-2--sqlite--postgresql) — SQLite → PostgreSQL against `postgres:16-alpine` | no |
+| ~~5~~ | ✅ **done 2026-09-13** — [Step 2](#step-2--sqlite--postgresql) SQLite → PostgreSQL, both services, on `postgres:16-alpine`. Browser-verified | no |
+| 5b | **The chart has no PostgreSQL** — added below, new 2026-09-13 | no |
 | — | **[Azure Foundation](phase-azure-foundation.md) — provision Azure here** | — |
 | 6 | [Step 1a](#step-1a--generate-and-store-after-phase-9) + [Step 1b](#step-1b--mount-it-via-the-csi-driver-after-phase-9) — store the certificate and mount it | **yes** |
 | 7 | [Step 6](#step-6--observability-wiring) — the Grafana Cloud header comes from Key Vault | **yes** |
@@ -484,6 +485,484 @@ volumes:
 
 This is the point where `clean.sh`'s confirmation prompt (Phase 1) starts
 earning its keep — there is now a real volume to lose.
+
+---
+
+> 🛑 **A declared value that no template reads renders nothing, silently**
+> (found twice on 2026-09-13). `values.yaml` carries `resources:` for all five
+> services; `helm-pjx/templates/` references none of them, so every pod renders
+> with no requests or limits. Earlier the same day, `values.yaml` said
+> `useIngress` while the template read `useNginx`, and the ConfigMap mount
+> vanished from the production render.
+>
+> Helm reports neither: an unread value and an undefined key are both legal.
+> `helm lint` passes, `helm template` succeeds, and the output is quietly missing
+> whatever you thought you configured. **The only check that works is rendering
+> the template and looking for the block:**
+>
+> ```bash
+> helm template pjx-test helm-pjx -s templates/pjx-api-dotnet.yaml | grep -A5 resources
+> ```
+>
+> Wire each Deployment's container with:
+>
+> ```yaml
+>         resources:
+>           {{- toYaml .Values.dotnetApi.resources | nindent 10 }}
+> ```
+>
+> substituting `web`, `apollo`, `nodeApi` and `sso` in the other four templates.
+
+## Step 5b — The chart has no database
+
+**New, found 2026-09-13 while finishing Step 2.** Compose now runs
+`postgres:16-alpine` and both services point at `Host=postgres`. The chart does
+not: `helm-pjx/templates/` has no postgres template, and the connection strings
+are baked into each service's `appsettings.json` rather than coming from
+configuration. Starting the k3d cluster today gives an app that boots and fails
+every query.
+
+This blocks the phase's own exit criterion — *prove it on k3d* — so it has to
+close before [Azure Foundation](phase-azure-foundation.md), not after.
+
+Two parts:
+
+1. **A database for the cluster.** For local k3d a single-replica
+   `postgres:16-alpine` Deployment plus a Service named `postgres` keeps the
+   connection string identical to Compose. In Azure it is a managed server, so
+   the template needs a value to switch it off — the same shape as
+   `ingress.enabled`.
+
+2. **The connection string as configuration, not a baked file.** It differs per
+   environment and carries a password, so it belongs in `pjx-config`
+   (or a Secret) and reaches the container as
+   `ConnectionStrings__DefaultConnection`. ASP.NET Core's environment-variable
+   provider maps `__` to `:`, so that key overrides `appsettings.json` with no
+   code change.
+
+   This also closes the *"chart sets ~8 env vars, Compose sets 31"* item in the
+   [deferred-work table](README.md#deferred-work) for the two values that now
+   matter most — and note `pjx-config` currently holds exactly **one** key,
+   `sso-authority`.
+
+> **Do not carry the local password into Azure.** `Username=pjx;Password=password`
+> is fine against a container that exists for the length of a demo. The Azure
+> server's credentials come from Key Vault via the CSI driver, the same path as
+> [Step 1b](#step-1b--mount-it-via-the-csi-driver-after-azure-foundation)'s
+> signing certificate.
+
+### Step 5b.1 — A PostgreSQL template for the cluster
+
+New file, `helm-pjx/templates/pjx-postgres.yaml`. Gated so Azure can turn it off
+and use the managed server instead — the same shape as `ingress.enabled`:
+
+```yaml
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pjx-postgres
+type: Opaque
+stringData:
+  # For the local demo only. Azure sets postgres.enabled=false and the
+  # connection string arrives from Key Vault — see Step 1b.
+  password: {{ required "postgres.password is required when postgres.enabled" .Values.postgres.password | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pjx-postgres-init
+data:
+  # POSTGRES_DB creates ONE database. Anything in this directory runs on first
+  # initialisation of the data directory, which is how the second one appears.
+  10-create-identity.sql: |
+    CREATE DATABASE pjx_identity OWNER pjx;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pjx-pgdata
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.postgres.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pjx-postgres-deployment
+  labels:
+    app: {{ .Values.postgres.appName }}
+spec:
+  # Single writer against one PVC. Never raise this.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.postgres.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.postgres.appName }}
+    spec:
+      containers:
+      - name: {{ .Values.postgres.appName }}
+        image: {{ .Values.postgres.image }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.postgres.resources | nindent 10 }}
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: {{ .Values.postgres.username | quote }}
+        - name: POSTGRES_DB
+          value: {{ .Values.postgres.database | quote }}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pjx-postgres
+              key: password
+        # The image writes into a subdirectory rather than the mount root,
+        # because a PVC root often contains lost+found and initdb refuses to
+        # run in a non-empty directory.
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.postgres.username }}"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.postgres.username }}"]
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: pjx-pgdata
+      - name: init
+        configMap:
+          name: pjx-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # This name is the hostname the services connect to. Calling it "postgres"
+  # makes the connection string identical to Compose, where the compose service
+  # name resolves the same way.
+  name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Values.postgres.appName }}
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      name: postgres
+{{- end }}
+```
+
+Note the init directory is a **whole-directory** mount with no `subPath`, unlike
+`config.js` in [Step 3b](#step-3b--mount-it-and-make-the-port-a-value). That is
+correct here: `/docker-entrypoint-initdb.d` is empty in the image, so there is
+nothing to mask — see
+[ConfigMaps, volumes and volumeMounts](../reference/kubernetes-config-and-volumes.md).
+
+Add to `values.yaml` — **disabled by default, and with no password**, so a
+production render fails loudly rather than shipping a known credential:
+
+```yaml
+postgres:
+  enabled: false          # Azure uses a managed server; see Azure Foundation
+  appName: pjx-postgres
+  image: postgres:16-alpine
+  username: pjx
+  database: pjx_calendar
+  storage: 2Gi
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+```
+
+and to `environments/local.yaml`:
+
+```yaml
+postgres:  { enabled: true, password: password }
+```
+
+> **Why the password may sit in `local.yaml` but never in `values.yaml`.**
+> [Phase 7](phase-7-cicd.md) deleted `pjx-secret.yaml` for shipping
+> `sso-password: cGFzc3dvcmQNCg==` — a *default* credential, committed, that
+> would have been deployed for real. This is the opposite: `values.yaml` has no
+> password at all and `required` aborts the render without one, while
+> `local.yaml` names a throwaway for a container that lives as long as a demo
+> and whose password is already plaintext in `appsettings.json` and
+> `docker-compose.devcontainer.yml`. The rule is **no credential on the
+> production path**, not "no string anywhere".
+
+### Step 5b.2 — The connection string as configuration
+
+Both services read `ConnectionStrings:DefaultConnection` from
+`appsettings.json`, which is baked into the image and differs per environment.
+ASP.NET Core's environment-variable provider maps `__` to `:` and takes
+precedence over `appsettings.json`, so an env var overrides it with **no code
+change**:
+
+```
+ConnectionStrings__DefaultConnection   →   ConnectionStrings:DefaultConnection
+```
+
+Add both to `helm-pjx/templates/pjx-config.yaml`, which currently holds exactly
+one key:
+
+```yaml
+data:
+  sso-authority: {{ .Values.ssoUrl }}
+  dotnet-connection: {{ .Values.connectionStrings.dotnetApi | quote }}
+  sso-connection:    {{ .Values.connectionStrings.sso | quote }}
+```
+
+`values.yaml`:
+
+```yaml
+connectionStrings:
+  # Overridden per environment. In Azure these name the managed server and the
+  # password comes from Key Vault, not from here.
+  dotnetApi: ""
+  sso: ""
+```
+
+`environments/local.yaml`:
+
+```yaml
+connectionStrings:
+  dotnetApi: "Host=postgres;Database=pjx_calendar;Username=pjx;Password=password"
+  sso:       "Host=postgres;Database=pjx_identity;Username=pjx;Password=password"
+```
+
+Then add the env var to each Deployment's existing `env:` block —
+`pjx-api-dotnet.yaml` after the `PJX_SSO__AUTHORITY` entry:
+
+```yaml
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            configMapKeyRef:
+              name: pjx-config
+              key: dotnet-connection
+```
+
+and the same in `pjx-sso-identityserver.yaml` with `key: sso-connection`.
+
+> **The name is case-sensitive and must match exactly.** `ConnectionStrings__DefaultConnection`,
+> not `CONNECTIONSTRINGS__DEFAULTCONNECTION` and not a single underscore. A
+> wrong name is not an error — the variable is simply ignored and the service
+> silently falls back to `appsettings.json`'s `Host=postgres`, which happens to
+> be *right locally and wrong everywhere else*. That is the worst possible
+> failure: it works on k3d and breaks on AKS.
+
+### Verify 5b
+
+Render first, then run it:
+
+```bash
+helm template pjx-test helm-pjx -f helm-pjx/environments/local.yaml -s templates/pjx-postgres.yaml
+helm template pjx-test helm-pjx -f helm-pjx/environments/local.yaml -s templates/pjx-api-dotnet.yaml | grep -A4 ConnectionStrings
+```
+
+The second must show the connection string, not an empty value.
+
+#### Four things a fresh cluster does not have
+
+`helm upgrade` against a cluster that is merely *reachable* will still fail, in
+four ways that each look like a different problem. Check them in this order —
+they are cheap, and each one is invisible until the pods are already wedged.
+
+| # | What | Symptom if missing | Survives `cluster stop/start`? | Survives `cluster delete`? |
+|---|---|---|---|---|
+| 1 | Devcontainer on the `k3d-pjx` network | `dial tcp: lookup k3d-pjx-serverlb` | ✅ | ❌ |
+| 2 | Kubeconfig pointed at `https://k3d-pjx-serverlb:6443` | `dial tcp 0.0.0.0:<port>: connection refused` | ✅ | ❌ |
+| 3 | The five images in containerd | `ErrImageNeverPull` | ✅ | ❌ |
+| 4 | The `pjx-tls` secret in namespace `pjx` | ingress serves Traefik's self-signed default; browser warns | ✅ | ❌ |
+
+Items 1 and 2 are [Phase 7b's DooD fix](phase-7b-local-k8s.md); item 4 is
+[Phase 7b Step 4](phase-7b-local-k8s.md#step-4--tls-from-the-existing-mkcert-certificate).
+All four are properties of the *cluster and the devcontainer*, not of the chart,
+which is why a green `helm template` says nothing about them.
+
+Check all four without starting anything:
+
+```bash
+docker inspect pjx-root-workspace-1 \
+  --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'   # must include k3d-pjx
+kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'  # must be k3d-pjx-serverlb
+```
+
+#### The run
+
+With Compose stopped so ports 80/443 are free — `make down` from inside the
+devcontainer stops Traefik, the app services, Grafana and any running k3d
+cluster, and skips the devcontainer itself:
+
+```bash
+make down
+k3d cluster start pjx
+
+# 1 + 2 — only after a `k3d cluster delete` + recreate
+docker network connect k3d-pjx pjx-root-workspace-1
+kubectl config set-cluster k3d-pjx --server=https://k3d-pjx-serverlb:6443
+
+kubectl config use-context k3d-pjx
+kubectl get nodes                      # gate: nothing below works until this does
+
+# 3 — the chart asks for these by the Compose-prefixed name
+for s in pjx-web-react pjx-graphql-apollo pjx-api-node pjx-api-dotnet \
+         pjx-sso-identityserver; do
+  k3d image import "pjx-root-$s:latest" -c pjx
+done
+
+# 4 — namespace first; helm's --create-namespace runs too late for the secret
+kubectl create namespace pjx --dry-run=client -o yaml | kubectl apply -f -
+cd local/central-router/config/cert
+CERT=$(ls *.pem | grep -v -- '-key' | head -1)
+kubectl -n pjx create secret tls pjx-tls \
+  --cert="${CERT}" --key="${CERT%.pem}-key.pem" \
+  --dry-run=client -o yaml | kubectl apply -f -
+cd -
+
+helm upgrade --install pjx helm-pjx -n pjx --create-namespace -f helm-pjx/environments/local.yaml
+kubectl -n pjx get pods -w
+kubectl -n pjx exec deploy/pjx-postgres-deployment -- psql -U pjx -l
+```
+
+> **`postgres:16-alpine` is not imported, deliberately.** `local.yaml` sets
+> `global.imagePullPolicy: Never` so a missing *local* image fails instantly
+> rather than spending 30s on Docker Hub. But the postgres image is an upstream
+> one that has to be pulled, which is why
+> [Step 5b.1](#step-5b1--a-postgresql-template-for-the-cluster)'s template reads
+> `.Values.postgres.imagePullPolicy` (`IfNotPresent`) instead of the global.
+> Reading the global here would give `ErrImageNeverPull` on a pod that has no
+> local copy and never will.
+
+> **`k3d image import` is the slow step.** Five images, ~2 GB, a minute or two.
+> It only has to be redone after a cluster *delete*, or after rebuilding an
+> image with `dev-up.sh -b`.
+
+The last command should list **both** `pjx_calendar` and `pjx_identity`. If only
+the first exists, the init ConfigMap did not mount, or the PVC already held an
+initialised data directory from an earlier run — `/docker-entrypoint-initdb.d`
+runs **only** when the data directory is empty. Delete the PVC and let it
+reinitialise:
+
+```bash
+kubectl -n pjx delete pvc pjx-pgdata
+kubectl -n pjx rollout restart deploy/pjx-postgres-deployment
+```
+
+> **Migrations still have to run against `pjx_calendar`.** The two services differ:
+> `projects/pjx-sso-identityserver/Program.cs:53` calls `db.Database.Migrate()` at
+> startup (and `SeedData.cs:36` again), so `pjx_identity` builds itself. The .NET
+> API does not, so an empty `pjx_calendar` has no tables. Port-forward and run the
+> tools the same way as locally:
+>
+> ```bash
+> kubectl -n pjx port-forward svc/postgres 5432:5432
+> ```
+>
+> then, in the devcontainer with `Host=localhost` temporarily, `dotnet ef database update`.
+> This is the argument for `Migrate()` on startup in *both* services, which
+> [AKS Deploy](phase-aks-deploy.md) needs anyway — a deploy that requires a
+> human with `kubectl` is not continuous delivery.
+
+### The cluster runs the image, and only the image (2026-09-13)
+
+This is the single biggest difference between the two runtimes, and it is
+invisible until something fails.
+
+```mermaid
+flowchart LR
+    SRC["projects/&lt;service&gt;/<br/><b>working tree</b>"]
+    subgraph compose["Compose — dev-up.sh"]
+        BM["bind mount<br/>./projects/x → /app"]
+        DW["dotnet watch /<br/>react-scripts start"]
+        BM --> DW
+    end
+    subgraph k3d["k3d — helm upgrade"]
+        IMG["image layer<br/><i>frozen at docker build</i>"]
+        RUN["same entrypoint,<br/>nothing to watch"]
+        IMG --> RUN
+    end
+    SRC -->|"live, every save"| BM
+    SRC -.->|"only at<br/>dev-up.sh -b"| IMG
+```
+
+Compose bind-mounts the working tree, so **every edit since the last build is
+already running**. Kubernetes has no bind mount: the pod gets the image's copy
+of the source, as it was the moment the image was built. The entrypoint is still
+`dotnet watch`, which is why the difference hides — the pod starts, watches a
+directory nobody is editing, and serves stale code indefinitely.
+
+The first encounter with this was the SSO pod crash-looping on:
+
+```
+System.ArgumentException: Keyword not supported: 'host'.
+   at Microsoft.Data.Sqlite.SqliteConnectionStringBuilder.GetIndex(String keyword)
+   at ...Migrator.Migrate(String targetMigration)
+   at IdentityServerAspNetIdentity.Program.Main(String[] args) in /app/Program.cs:line 53
+```
+
+`Microsoft.Data.**Sqlite**` — after [Step 2](#step-2--sqlite--postgresql) changed
+`UseSqlite` to `UseNpgsql` and Compose had been verified green in a browser. The
+env var from [Step 5b.2](#step-5b2--the-connection-string-as-configuration) was
+delivered correctly; the *code reading it* was from before the change. A correct
+ConfigMap feeding a stale binary looks exactly like a broken ConfigMap.
+
+**So: rebuild and re-import after any source change you want the cluster to see.**
+
+```bash
+dev-up.sh -b -d                                    # rebuild via Compose
+for s in pjx-web-react pjx-graphql-apollo pjx-api-node pjx-api-dotnet \
+         pjx-sso-identityserver; do
+  k3d image import "pjx-root-$s:latest" -c pjx
+done
+kubectl -n pjx rollout restart deploy               # :latest never re-pulls
+```
+
+The `rollout restart` is not optional. Every image is tagged `:latest` and the
+spec does not change, so Kubernetes sees an identical Deployment and does
+nothing — a re-import alone changes the bytes in containerd and leaves the
+running pod on the old layer.
+
+> **Check before you debug.** `docker images` timestamps against `git log` answer
+> "is this even my code?" in one line, and it is the first question to ask of any
+> cluster-only failure:
+>
+> ```bash
+> docker images --format '{{.Repository}}\t{{.CreatedAt}}' | grep '^pjx-root-'
+> git log -1 --format='%ci %s'
+> ```
+
+### Known gaps after a green 5b run
+
+Things that are wrong but are *not* Step 5b, recorded so they are not
+rediscovered as mysteries:
+
+| Symptom | Cause | Owner |
+|---|---|---|
+| React pod `0/1`, restarts climbing, logs stop after `react-scripts start` | `react-scripts` dev compile takes longer than `livenessProbe` allows (`initialDelaySeconds: 20`, `periodSeconds: 30`, `failureThreshold: 3`), so it is killed mid-webpack and never finishes. Compose hides this — `node_modules` is a warm volume and there is no liveness probe. | needs a `startupProbe`, or the production image |
+| `kubectl get ingress` shows `CLASS <none>` | `pjx-ingress.yaml:7` sets the deprecated `kubernetes.io/ingress.class` annotation rather than `spec.ingressClassName`. Traefik still claims it. | tidy-up, pre-AKS |
+| HTTPS warns / wrong certificate | `pjx-tls` secret absent from the namespace; Traefik falls back to its self-signed default | [Phase 7b Step 4](phase-7b-local-k8s.md#step-4--tls-from-the-existing-mkcert-certificate) |
+| `pjx-sso-identityserver.yaml:22` `containerPort: 5002` | the container listens on 80 | tidy-up, pre-AKS |
 
 ---
 

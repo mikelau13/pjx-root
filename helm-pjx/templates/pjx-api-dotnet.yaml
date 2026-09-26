@@ -18,6 +18,8 @@ spec:
       - name: {{ .Values.dotnetApi.appName}}
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.dotnetApi) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.dotnetApi.resources | nindent 10 }}
         ports:
         - containerPort: 80
         readinessProbe:
@@ -39,6 +41,12 @@ spec:
             configMapKeyRef:
               name: pjx-config
               key: sso-authority
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            configMapKeyRef:
+              name: pjx-config
+              key: dotnet-connection
+
 ---
 apiVersion: v1
 kind: Service

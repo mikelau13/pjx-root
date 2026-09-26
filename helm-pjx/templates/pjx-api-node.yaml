@@ -18,6 +18,8 @@ spec:
       - name: {{ .Values.nodeApi.appName }}
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.nodeApi) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.nodeApi.resources | nindent 10 }}
         ports:
         - containerPort: 8081
         readinessProbe:

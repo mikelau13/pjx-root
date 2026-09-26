@@ -18,6 +18,8 @@ spec:
       - name: {{ .Values.web.appName }}
         image: {{ include "pjx.image" (dict "root" $ "svc" .Values.web) }}
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        resources:
+            {{- toYaml .Values.web.resources | nindent 10 }}
         # react-scripts start exits with code 0 when stdin closes. Compose sets
         # stdin_open: true for the same reason; these are the Kubernetes spelling.
         stdin: true
